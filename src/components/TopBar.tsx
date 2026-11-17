@@ -2,7 +2,10 @@ import type { MobileView } from "../types";
 
 interface TopBarProps {
   projectName: string;
+  projectCount: number;
   onRenameProject: () => void;
+  onOpenProjects: () => void;
+  onSearch: () => void;
   mobileView: MobileView;
   onMobileView: (view: MobileView) => void;
   autoRun: boolean;
@@ -14,7 +17,10 @@ interface TopBarProps {
 
 export default function TopBar({
   projectName,
+  projectCount,
   onRenameProject,
+  onOpenProjects,
+  onSearch,
   mobileView,
   onMobileView,
   autoRun,
@@ -60,6 +66,27 @@ export default function TopBar({
           <em>Otion</em>
           <small>{projectName}</small>
         </span>
+      </button>
+
+      <button
+        type="button"
+        className="topbar__projects"
+        onClick={onOpenProjects}
+        aria-label={`Switch project (${projectCount} projects)`}
+        title="Switch project (⌘⇧E)"
+      >
+        <span aria-hidden="true">▦</span>
+        <span className="topbar__projects-count">{projectCount}</span>
+      </button>
+
+      <button
+        type="button"
+        className="icon-btn topbar__search"
+        onClick={onSearch}
+        aria-label="Search in project"
+        title="Search in project (⌘⇧H)"
+      >
+        ⌕
       </button>
 
       <div className="topbar__mobile-switch segmented" role="group" aria-label="Mobile pane">

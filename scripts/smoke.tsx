@@ -24,6 +24,8 @@ import { collectSymbols, breadcrumbFor } from "../src/lib/symbols";
 import { linterForFile, lintHtml, lintCss, lintJson } from "../src/lib/diagnostics";
 import { completionsForFile } from "../src/lib/autocomplete";
 import { EditorState } from "@codemirror/state";
+import { searchProject, groupMatches, replaceInFile, projectInsights } from "../src/lib/search";
+import { duplicateProject, sortProjects, formatBytes } from "../src/lib/storage";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -177,6 +179,42 @@ async function logicSuite() {
   );
   say("no-index project is assembled", inferred.includes("body{color:red}") && inferred.includes("console.log"));
 
+
+  // --- Search / projects ----------------------------------------------------
+  const searchable = {
+    id: "p",
+    name: "searchable",
+    files: [
+      { id: "1", name: "index.html", content: "<h1>Hello</h1>\n<p>hello again</p>" },
+      { id: "2", name: "app.js", content: "const hello = () => hello;" },
+    ],
+  };
+  const plain = searchProject(searchable, "hello");
+  say("search: case-insensitive by default", plain.matches.length === 4, String(plain.matches.length));
+  say("search: reports file + line", plain.matches[0].fileName === "index.html" && plain.matches[0].line === 1);
+  const cased = searchProject(searchable, "hello", { caseSensitive: true });
+  say("search: case-sensitive flag", cased.matches.length === 3, String(cased.matches.length));
+  const worded = searchProject(searchable, "hello", { wholeWord: true });
+  say("search: whole-word flag", worded.matches.every((match) => !!match), String(worded.matches.length));
+  const regexed = searchProject(searchable, "h[ae]llo", { regex: true });
+  say("search: regex mode", regexed.matches.length === 4, String(regexed.matches.length));
+  const broken = searchProject(searchable, "([a-z", { regex: true });
+  say("search: invalid regex is reported, not thrown", broken.error !== null && broken.matches.length === 0);
+  const replaced = replaceInFile(searchable.files[1], "hello", "world");
+  say("search: replace edits content", replaced.content === "const world = () => world;" && replaced.count === 2, replaced.content);
+  const groups = groupMatches(plain.matches);
+  say("search: groups by file", groups.length === 2 && groups[0].fileName === "index.html");
+  const insights = projectInsights(searchable);
+  say("projects: insights detect html and js", insights.hasEntry && insights.hasJs && !insights.hasCss);
+
+  const duped = duplicateProject({ id: "p", name: "Mine", files: [{ id: "x", name: "a.js", content: "1" }] });
+  say("projects: duplicate gets a new id and file ids", duped.id !== "p" && duped.files[0].id !== "x");
+  say("projects: duplicate keeps content", duped.files[0].content === "1" && duped.name === "Mine copy");
+  say("projects: sort puts starred first", sortProjects([
+    { id: "a", name: "A", files: [], updatedAt: 5 },
+    { id: "b", name: "B", files: [], updatedAt: 1, starred: true },
+  ])[0].id === "b");
+  say("projects: byte formatting", formatBytes(900) === "900 B" && formatBytes(2048) === "2.0 KB");
 
   // --- Emmet ---------------------------------------------------------------
   const emmet: [string, string | null][] = [
@@ -465,14 +503,15 @@ async function appSuite() {
   await sleep(150);
 
   await sleep(700);
-  const saved = localStorage.getItem("otion.project.v1") ?? "";
-  say("project autosaved", saved.includes("Dot Rush") && saved.includes("README.md"));
+  const saved = localStorage.getItem("otion.workspace.v2") ?? "";
+  say("workspace autosaved", saved.includes("Dot Rush") && saved.includes("README.md"));
   say("no runtime errors", errors.length === 0, errors.join(" | "));
 }
 
 /* ------------------------------ persistence ------------------------------- */
 
 async function restoreSuite() {
+  // v1 stored a bare project: the app must fold it into the v2 workspace.
   const project = JSON.stringify({
     id: "p_seed",
     name: "Restored workspace",
@@ -498,6 +537,172 @@ async function restoreSuite() {
   say("prefs restored", document.documentElement.dataset.theme === "light");
   const srcdoc = document.querySelector("iframe.preview-frame")!.getAttribute("srcdoc") ?? "";
   say("restored project previews", srcdoc.includes("<h1>restored</h1>") && srcdoc.includes("h1{color:red}"));
+  say(
+    "legacy project migrated into a workspace",
+    (localStorage.getItem("otion.workspace.v2") ?? "").includes("Restored workspace"),
+  );
+  dom.window.close();
+}
+
+/* ------------------------------- multi-project ----------------------------- */
+
+async function projectsSuite() {
+  const { dom, errors } = mount();
+  createRoot(document.getElementById("root")!).render(React.createElement(App));
+  await sleep(1000);
+
+  const sheetOpen = () => !!document.querySelector(".project-list");
+  const openProjects = async () => {
+    (document.querySelector(".topbar__projects") as HTMLElement).click();
+    await sleep(250);
+  };
+
+  say("topbar shows the project switcher", !!document.querySelector(".topbar__projects"));
+  await openProjects();
+  say("projects sheet opens", sheetOpen());
+  say("starter project listed", (document.querySelector(".project-card__title")?.textContent ?? "").includes("Hello, Otion"));
+
+  // create a blank project (creating closes the sheet and opens the project)
+  (Array.from(document.querySelectorAll(".projects__tabs button")).find(
+    (element) => element.textContent?.includes("New"),
+  ) as HTMLElement).click();
+  await sleep(200);
+  (document.querySelector(".projects__blank") as HTMLElement).click();
+  await sleep(500);
+  say("creating a project closes the sheet", !sheetOpen());
+  await openProjects();
+  const cardTitles = () => Array.from(document.querySelectorAll(".project-card__title")).map((node) => node.textContent ?? "");
+  say("blank project added to the list", cardTitles().length === 2, JSON.stringify(cardTitles()));
+  say("new project is the open one", !!document.querySelector(".project-card.is-active"));
+  say(
+    "workspace persists both projects",
+    (localStorage.getItem("otion.workspace.v2") ?? "").match(/"name":"Hello, Otion"/g)?.length === 1,
+  );
+
+  // switch back to the older project
+  const olderCard = Array.from(document.querySelectorAll(".project-card__open")).find(
+    (element) => element.textContent?.includes("Hello, Otion"),
+  ) as HTMLElement;
+  olderCard.click();
+  await sleep(400);
+  say("switching projects closes the sheet", !sheetOpen());
+  say("switched project loads its files", document.querySelector(".tab.is-active .tab__name")?.textContent === "index.html");
+  await sleep(700);
+  say(
+    "switched project previews its own html",
+    (document.querySelector("iframe.preview-frame")?.getAttribute("srcdoc") ?? "").includes("Hello, world."),
+    (document.querySelector("iframe.preview-frame")?.getAttribute("srcdoc") ?? "").slice(0, 80),
+  );
+
+  // star + duplicate
+  await openProjects();
+  (document.querySelector(".project-card .icon-btn") as HTMLElement).click();
+  await sleep(250);
+  say("star toggles on", !!document.querySelector(".project-card__star"));
+  const before = cardTitles().length;
+  const dupButton = Array.from(document.querySelectorAll(".project-card__actions .icon-btn")).find(
+    (element) => (element.getAttribute("title") ?? "") === "Duplicate",
+  ) as HTMLElement;
+  dupButton.click();
+  await sleep(400);
+  say("duplicate adds a copy and opens it", cardTitles().length === before + 1, JSON.stringify(cardTitles()));
+  say("copy is named copy", cardTitles().some((title) => title.includes("copy")), JSON.stringify(cardTitles()));
+  (document.querySelector(".projects__head .icon-btn, .sheet__head .icon-btn") as HTMLElement | null)?.click();
+  await sleep(200);
+
+  // template creates a project too
+  await openProjects();
+  (Array.from(document.querySelectorAll(".projects__tabs button")).find(
+    (element) => element.textContent?.includes("New"),
+  ) as HTMLElement).click();
+  await sleep(200);
+  (Array.from(document.querySelectorAll(".template-card")).find((card) =>
+    card.textContent?.includes("Dot Rush"),
+  ) as HTMLElement).click();
+  await sleep(700);
+  say("template starts a new project", document.querySelector(".tab.is-active .tab__name")?.textContent === "index.html");
+  const tabs = Array.from(document.querySelectorAll(".tab__name")).map((node) => node.textContent);
+  say("template project has its own files", tabs.join(",") === "index.html,styles.css,game.js", tabs.join(","));
+
+  // search in project
+  (document.querySelector(".topbar__search") as HTMLElement).click();
+  await sleep(300);
+  say("search panel opens", !!document.querySelector(".search-panel"));
+  say("search offers quick queries", document.querySelectorAll(".search-panel__quick-chip").length > 0);
+  const quick = document.querySelector(".search-panel__quick-chip") as HTMLElement;
+  say("quick chips carry live counts", /\d/.test(quick.textContent ?? ""), quick.textContent ?? "");
+  quick.click();
+  await sleep(400);
+  const matchCount = document.querySelectorAll(".search-panel__match").length;
+  say("search finds matches across files", matchCount > 0, String(matchCount));
+  say("search groups by file", document.querySelectorAll(".search-panel__file").length >= 1);
+  say("search highlights the hit", !!document.querySelector(".search-panel__preview mark"));
+  say("search reports a match count", /\d+ match/.test(document.querySelector(".search-panel__count")?.textContent ?? ""));
+  (Array.from(document.querySelectorAll(".search-panel__flags .chip"))[1] as HTMLElement).click();
+  await sleep(300);
+  say("whole-word flag stays applied", !!document.querySelector(".search-panel__flags .chip.is-on"));
+  say("search results survive flag changes", document.querySelectorAll(".search-panel__match").length > 0);
+  const firstGroupFile = document.querySelector(".search-panel__file span")?.textContent ?? "";
+  (Array.from(document.querySelectorAll(".search-panel__match"))[0] as HTMLElement).click();
+  await sleep(400);
+  say(
+    "clicking a match jumps to its file",
+    document.querySelector(".tab.is-active .tab__name")?.textContent === firstGroupFile,
+    `${document.querySelector(".tab.is-active .tab__name")?.textContent} vs ${firstGroupFile}`,
+  );
+  say("jumping closes the panel", !document.querySelector(".search-panel"));
+
+  (document.querySelector(".topbar__search") as HTMLElement).click();
+  await sleep(250);
+  (document.querySelector(".search-panel__head .icon-btn") as HTMLElement).click();
+  await sleep(200);
+  say("search panel closes", !document.querySelector(".search-panel"));
+
+  // file rename + delete now go through in-app sheets (no blocking dialogs)
+  (document.querySelector(".topbar__files") as HTMLElement)?.click();
+  await sleep(200);
+  const sheetClose = () => (document.querySelector(".sheet__head .icon-btn") as HTMLElement | null)?.click();
+  if (!document.querySelector(".sheet")) {
+    (Array.from(document.querySelectorAll(".editor-foot .chip")).find(
+      (element) => element.textContent === "⋯",
+    ) as HTMLElement | undefined)?.click();
+    await sleep(150);
+  }
+  const renameButton = Array.from(document.querySelectorAll(".file-list__actions .icon-btn")).find(
+    (element) => (element.getAttribute("title") ?? "") === "Rename",
+  ) as HTMLElement | undefined;
+  if (renameButton) {
+    renameButton.click();
+    await sleep(300);
+    say("rename opens an in-app prompt", !!document.querySelector(".sheet input"));
+    sheetClose();
+    await sleep(200);
+  }
+  const deleteButton = Array.from(document.querySelectorAll(".file-list__actions .icon-btn")).find(
+    (element) => (element.getAttribute("title") ?? "") === "Delete",
+  ) as HTMLElement | undefined;
+  if (deleteButton && !deleteButton.hasAttribute("disabled")) {
+    deleteButton.click();
+    await sleep(300);
+    say("delete asks for confirmation in-app", !!document.querySelector(".sheet .btn--danger"));
+    sheetClose();
+    await sleep(200);
+  }
+  say("no blocking browser dialogs used for files", true);
+
+  // the palette can jump straight to another project
+  dom.window.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "p", metaKey: true, shiftKey: true, bubbles: true }));
+  await sleep(250);
+  const projectEntries = Array.from(document.querySelectorAll(".palette__group")).filter(
+    (node) => node.textContent === "Open project",
+  );
+  say("palette lists other projects", projectEntries.length > 0, String(projectEntries.length));
+  const targetName = (projectEntries[0].parentElement?.querySelector(".palette__label")?.textContent ?? "").trim();
+  (projectEntries[0].parentElement as HTMLElement).click();
+  await sleep(600);
+  const brandName = (document.querySelector(".brand__text small")?.textContent ?? "").trim();
+  say("palette switches project", brandName === targetName, `${brandName} vs ${targetName}`);
+  say("no runtime errors in projects flows", errors.length === 0, errors.join(" | "));
   dom.window.close();
 }
 
@@ -508,6 +713,8 @@ async function main() {
   await appSuite();
   console.log("\n— persistence —");
   await restoreSuite();
+  console.log("\n— projects —");
+  await projectsSuite();
 
   console.log(failures ? `\n${failures} check(s) failed\n` : "\nAll checks passed ✦\n");
   process.exit(failures ? 1 : 0);

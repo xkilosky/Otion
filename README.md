@@ -33,10 +33,31 @@ palette and a real status bar — all sized for a thumb.
 - **Light and heavy.** The editor stays smooth on a phone; Markdown and Python
   grammars are lazy-loaded.
 
+## Projects
+
+Otion keeps as many projects as you like, all in this browser.
+
+- **Project switcher** (`⌘⇧E`, the `▦` chip in the header, or the row above the
+  file list on desktop) lists every project with file/line counts, size, "last
+  edited", and health tags — `html`/`css`/`js` present, `TODO` count, empty files.
+- **Create** a blank project, or start from any template — a template always
+  becomes its own project, so nothing you were working on is replaced.
+- **Duplicate** (⧉) to fork before experimenting, **star** (★) to pin, add a
+  **description**, **rename**, **export** one project as JSON, or **delete** it
+  after an in-app confirmation.
+- **Import** accepts a single project or a whole workspace export; the legacy
+  v1 project key is migrated automatically on first load.
+- Each project remembers its own open file, and switching projects resets the
+  preview channel and console.
+
 ## Features
 
 - **Multi-file projects** with tabs, a rename/delete file list, and a new-file
   sheet with quick names.
+- **Search & replace across the project** (`⌘⇧H`): case / whole-word / regex
+  flags, quick-search chips with live counts (`console.log`, `TODO`, `@media`,
+  `class=`, `id=`, `px`), results grouped per file with highlighted hits, tap a
+  match to jump to that line, and replace-all.
 - **Live preview** in a sandboxed iframe. `index.html` is the entry point;
   `<link rel="stylesheet">`, `<script src>` and local `<img src>` references are
   inlined automatically (images become data URLs) so the preview needs no server.
@@ -97,7 +118,9 @@ palette and a real status bar — all sized for a thumb.
 | --- | --- |
 | `⌘`/`Ctrl` + `↵` | Run / refresh the preview |
 | `⌘`/`Ctrl` + `S` | Save to this browser |
-| `⌘`/`Ctrl` + `⇧` + `P` | Command palette (also `⌘P`) |
+| `⌘`/`Ctrl` + `⇧` + `P` | Command palette (also `⌘P`) — includes project switching |
+| `⌘`/`Ctrl` + `⇧` + `E` | Project switcher |
+| `⌘`/`Ctrl` + `⇧` + `H` | Search across the project |
 | `⌘`/`Ctrl` + `⇧` + `F` | Format the current file (also `⌥⌘L`) |
 | `⌘`/`Ctrl` + `F` | Find in file (`⌘G` — go to line) |
 | `Tab` | Expand an Emmet abbreviation, else accept a completion |
@@ -124,7 +147,9 @@ the preview bundler, the console bridge and channel filtering, mobile view
 switching, template loading, duplicate-name handling and restore-from-storage —
 plus the IDE layer: Emmet expansion (10 cases), symbol/breadcrumb extraction,
 every linter, completion wiring, and the command palette, outline panel,
-minimap, status bar and touch action tray against the rendered DOM.
+minimap, status bar and touch action tray against the rendered DOM. The
+multi-project layer gets its own suite: create/switch/duplicate/star, template
+projects, the v1→v2 migration, and search (flags, grouping, replace, jumping).
 
 ## Project layout
 
@@ -140,6 +165,8 @@ src/
     Minimap.tsx           document map with a draggable viewport
     StatusBar.tsx         language, cursor, counts, problems, autosave
     PromptSheet.tsx       keyboard-safe prompt (go-to-line, rename)
+    ProjectsSheet.tsx     project switcher: create, duplicate, star, export, delete
+    SearchPanel.tsx       project-wide search & replace with quick queries
     PreviewPane.tsx       debounced live preview, widths, copy/reload
     ConsolePanel.tsx      console dock
     FileList.tsx          file rows with rename/delete
@@ -158,8 +185,9 @@ src/
     autocomplete.ts       tag/CSS/JS completions + snippet catalogs
     emmet.ts              abbreviation expander
     symbols.ts            outline symbols + breadcrumbs
+    search.ts             project-wide search/replace + project insights
     editorExtensions.ts   Tab/Emmet keymap, placeholder, sizing, lint wiring
-    storage.ts            localStorage read/write with fallbacks
+    storage.ts            workspace persistence (v2 multi-project + v1 migration)
   styles/global.css       design tokens + mobile-first layout
 ```
 

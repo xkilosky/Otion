@@ -11,20 +11,27 @@ import Toast, { useToast } from "./components/Toast";
 import StatusBar from "./components/StatusBar";
 import CommandPalette, { type Command } from "./components/CommandPalette";
 import PromptSheet from "./components/PromptSheet";
+import ProjectsSheet from "./components/ProjectsSheet";
+import SearchPanel from "./components/SearchPanel";
 import type { EditorStats } from "./components/CodeEditor";
 import {
+  duplicateProject,
+  emptyProject,
   loadActiveFileId,
   loadPrefs,
-  loadProject,
+  loadWorkspace,
+  newProjectId,
   saveActiveFileId,
   savePrefs,
-  saveProject,
+  saveWorkspace,
+  projectFromTemplateWithMeta,
+  sortProjects,
 } from "./lib/storage";
-import { makeFile, projectFromTemplate, starterProject } from "./lib/templates";
+import { makeFile } from "./lib/templates";
 import { formatCode } from "./lib/format";
 import type { EditorView } from "@codemirror/view";
 import { languageLabel } from "./lib/languages";
-import type { ConsoleEntry, Project, UiPrefs } from "./types";
+import type { ConsoleEntry, Project, UiPrefs, Workspace } from "./types";
 
 const CONSOLE_LIMIT = 300;
 const QUICK_NAMES = ["index.html", "styles.css", "script.js", "README.md"];
@@ -39,7 +46,7 @@ let entrySeq = 0;
 const newChannel = () => `otion-${Math.random().toString(36).slice(2, 10)}`;
 
 export default function App() {
-  const [project, setProject] = useState<Project>(() => loadProject());
+  const [workspace, setWorkspace] = useState<Workspace>(() => loadWorkspace());
   const [prefs, setPrefs] = useState<UiPrefs>(() => loadPrefs());
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [autoRun, setAutoRun] = useState(true);
@@ -56,6 +63,16 @@ export default function App() {
   const [newFileName, setNewFileName] = useState("");
   const [addingFile, setAddingFile] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [confirm, setConfirm] = useState<
+    | null
+    | {
+        title: string;
+        body: string;
+        confirmLabel: string;
+        danger?: boolean;
+        run: () => void;
+      }
+  >(null);
   const [prompt, setPrompt] = useState<
     | null
     | {
@@ -78,10 +95,41 @@ export default function App() {
   const editorViewRef = useRef<EditorView | null>(null);
   const [selectionLength, setSelectionLength] = useState(0);
   const [command, setCommand] = useState<EditorCommand | null>(null);
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const { toast, notify } = useToast();
   const channelRef = useRef(channel);
   const saveTimer = useRef<number | null>(null);
+
+  const project = useMemo<Project>(() => {
+    return (
+      workspace.projects.find((entry) => entry.id === workspace.activeProjectId) ??
+      workspace.projects[0] ??
+      emptyProject()
+    );
+  }, [workspace]);
+
+  /** Replace the open project, keeping the workspace list in sync. */
+  const setProject = useCallback(
+    (patch: Project | ((current: Project) => Project)) => {
+      setWorkspace((current) => {
+        const target =
+          current.projects.find((entry) => entry.id === current.activeProjectId) ??
+          current.projects[0];
+        if (!target) return current;
+        const next =
+          typeof patch === "function" ? (patch as (value: Project) => Project)(target) : patch;
+        return {
+          ...current,
+          projects: current.projects.map((entry) =>
+            entry.id === target.id ? { ...next, id: target.id, updatedAt: Date.now() } : entry,
+          ),
+        };
+      });
+    },
+    [],
+  );
 
   const activeFile = useMemo(
     () =>
@@ -91,15 +139,18 @@ export default function App() {
     [project.files, activeFileId],
   );
 
-  // Restore the file that was open last session (falls back to the first file).
+  // Restore the file that was open: the project remembers its own last file,
+  // and the session-level key covers the very first mount.
   useEffect(() => {
-    const remembered = loadActiveFileId();
+    const remembered = project.lastFileId ?? loadActiveFileId();
     if (remembered && project.files.some((file) => file.id === remembered)) {
       setActiveFileId(remembered);
+    } else {
+      setActiveFileId(project.files[0]?.id ?? null);
     }
-    // Only on first mount.
+    // Re-runs whenever the open project changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [project.id]);
 
   useEffect(() => {
     saveActiveFileId(activeFile?.id ?? null);
@@ -118,14 +169,14 @@ export default function App() {
   useEffect(() => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
-      const ok = saveProject(project);
+      const ok = saveWorkspace(workspace);
       setSaveError(!ok);
       if (ok) setSavedAt(Date.now());
     }, 450);
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
-  }, [project]);
+  }, [workspace]);
 
   // Console bridge: only messages from the current preview channel count.
   useEffect(() => {
@@ -247,12 +298,31 @@ export default function App() {
     notify(`Created ${name}`);
   }, [newFileName, project.files, notify]);
 
-  const renameFile = useCallback((id: string, name: string) => {
-    setProject((current) => ({
-      ...current,
-      files: current.files.map((file) => (file.id === id ? { ...file, name } : file)),
-    }));
-  }, []);
+  const renameFile = useCallback(
+    (id: string, currentName: string) => {
+      setPrompt({
+        title: "Rename file",
+        label: "File name",
+        value: currentName,
+        confirmLabel: "Rename",
+        onSubmit: (name) => {
+          const clean = name.replace(/\s+/g, "-");
+          if (project.files.some((file) => file.id !== id && file.name.toLowerCase() === clean.toLowerCase())) {
+            notify(`"${clean}" already exists`, "error");
+            return;
+          }
+          setProject((current) => ({
+            ...current,
+            files: current.files.map((file) =>
+              file.id === id ? { ...file, name: clean } : file,
+            ),
+          }));
+          notify(`Renamed to ${clean}`);
+        },
+      });
+    },
+    [project.files, notify, setProject],
+  );
 
   const deleteFile = useCallback(
     (id: string) => {
@@ -260,12 +330,22 @@ export default function App() {
         notify("Keep at least one file", "error");
         return;
       }
+      const target = project.files.find((file) => file.id === id);
+      if (!target) return;
       const remaining = project.files.filter((file) => file.id !== id);
-      setProject((current) => ({ ...current, files: remaining }));
-      setActiveFileId((current) => (current === id ? (remaining[0]?.id ?? null) : current));
-      notify("File deleted");
+      setConfirm({
+        title: "Delete file",
+        body: `Delete “${target.name}”? This can't be undone.`,
+        confirmLabel: "Delete",
+        danger: true,
+        run: () => {
+          setProject((current) => ({ ...current, files: remaining }));
+          setActiveFileId((current) => (current === id ? (remaining[0]?.id ?? null) : current));
+          notify("File deleted");
+        },
+      });
     },
-    [project.files, notify],
+    [project.files, notify, setProject],
   );
 
   const renameProject = useCallback(() => {
@@ -287,61 +367,257 @@ export default function App() {
     if (window.innerWidth < 860) patchPrefs({ mobileView: "preview" });
   }, [runPreview, patchPrefs]);
 
-  const loadTemplate = useCallback(
-    (templateId: string) => {
-      const next = projectFromTemplate(templateId);
-      setProject(next);
+  const addProject = useCallback(
+    (next: Project) => {
+      setWorkspace((current) => ({
+        version: 2,
+        projects: [...current.projects, next],
+        activeProjectId: next.id,
+      }));
       setActiveFileId(next.files[0]?.id ?? null);
       setEntries([]);
       setConsoleOpen(false);
       setTemplatesOpen(false);
+      setProjectsOpen(false);
       setChannel(newChannel());
-      notify(`${next.name} loaded`);
+      return next;
     },
-    [notify],
+    [],
   );
 
-  const exportProject = useCallback(() => {
-    const payload = {
-      app: "Otion",
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      id: project.id,
-      name: project.name,
-      files: project.files.map(({ name, content }) => ({ name, content })),
-    };
+  const loadTemplate = useCallback(
+    (templateId: string) => {
+      // A template always becomes its own project, so nothing is overwritten.
+      const next = addProject(projectFromTemplateWithMeta(templateId));
+      notify(`${next.name} created`);
+    },
+    [addProject, notify],
+  );
+
+  const openProject = useCallback(
+    (id: string) => {
+      setWorkspace((current) => {
+        if (!current.projects.some((entry) => entry.id === id)) return current;
+        return { ...current, activeProjectId: id };
+      });
+      setActiveFileId(null);
+      setEntries([]);
+      setConsoleOpen(false);
+      setProjectsOpen(false);
+      setChannel(newChannel());
+    },
+    [],
+  );
+
+  const renameProjectById = useCallback(
+    (id: string) => {
+      const target = workspace.projects.find((entry) => entry.id === id);
+      if (!target) return;
+      setPrompt({
+        title: "Rename project",
+        label: "Project name",
+        value: target.name,
+        confirmLabel: "Rename",
+        onSubmit: (name) =>
+          setWorkspace((current) => ({
+            ...current,
+            projects: current.projects.map((entry) =>
+              entry.id === id ? { ...entry, name, updatedAt: Date.now() } : entry,
+            ),
+          })),
+      });
+    },
+    [workspace.projects],
+  );
+
+  const describeProject = useCallback(
+    (id: string) => {
+      const target = workspace.projects.find((entry) => entry.id === id);
+      if (!target) return;
+      setPrompt({
+        title: "Project description",
+        label: "Short note",
+        value: target.description ?? "",
+        confirmLabel: "Save",
+        onSubmit: (description) =>
+          setWorkspace((current) => ({
+            ...current,
+            projects: current.projects.map((entry) =>
+              entry.id === id ? { ...entry, description, updatedAt: Date.now() } : entry,
+            ),
+          })),
+      });
+    },
+    [workspace.projects],
+  );
+
+  const deleteProject = useCallback(
+    (id: string) => {
+      if (workspace.projects.length <= 1) {
+        notify("Keep at least one project", "error");
+        return;
+      }
+      const target = workspace.projects.find((entry) => entry.id === id);
+      if (!target) return;
+      setConfirm({
+        title: "Delete project",
+        body: `Delete “${target.name}” and its ${target.files.length} file${
+          target.files.length === 1 ? "" : "s"
+        }? This can't be undone.`,
+        confirmLabel: "Delete project",
+        danger: true,
+        run: () => {
+          setWorkspace((current) => {
+            const projects = current.projects.filter((entry) => entry.id !== id);
+            return {
+              ...current,
+              projects,
+              activeProjectId:
+                current.activeProjectId === id ? projects[0].id : current.activeProjectId,
+            };
+          });
+          setActiveFileId(null);
+          setChannel(newChannel());
+          notify("Project deleted");
+        },
+      });
+    },
+    [workspace.projects, notify],
+  );
+
+  const duplicateProjectById = useCallback((id: string) => {
+    setWorkspace((current) => {
+      const target = current.projects.find((entry) => entry.id === id);
+      if (!target) return current;
+      const copy = duplicateProject(target);
+      return { ...current, projects: [...current.projects, copy], activeProjectId: copy.id };
+    });
+    setActiveFileId(null);
+    setChannel(newChannel());
+  }, []);
+
+  const toggleStar = useCallback((id: string) => {
+    setWorkspace((current) => ({
+      ...current,
+      projects: current.projects.map((entry) =>
+        entry.id === id ? { ...entry, starred: !entry.starred } : entry,
+      ),
+    }));
+  }, []);
+
+  const downloadJson = useCallback((payload: unknown, name: string) => {
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "otion-project"}.json`;
+    link.download = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "otion-project"}.json`;
     link.click();
     URL.revokeObjectURL(url);
+  }, []);
+
+  const exportProject = useCallback(() => {
+    downloadJson(
+      {
+        app: "Otion",
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        id: project.id,
+        name: project.name,
+        description: project.description,
+        files: project.files.map(({ name, content }) => ({ name, content })),
+      },
+      project.name,
+    );
     notify("Project exported");
-  }, [project, notify]);
+  }, [downloadJson, project, notify]);
+
+  const exportProjectById = useCallback(
+    (id: string) => {
+      const target = workspace.projects.find((entry) => entry.id === id);
+      if (!target) return;
+      downloadJson(
+        {
+          app: "Otion",
+          version: 2,
+          exportedAt: new Date().toISOString(),
+          id: target.id,
+          name: target.name,
+          description: target.description,
+          files: target.files.map(({ name, content }) => ({ name, content })),
+        },
+        target.name,
+      );
+      notify(`Exported ${target.name}`);
+    },
+    [downloadJson, workspace.projects, notify],
+  );
+
+  const exportEverything = useCallback(() => {
+    downloadJson(
+      {
+        app: "Otion",
+        version: 2,
+        kind: "workspace",
+        exportedAt: new Date().toISOString(),
+        projects: workspace.projects.map((entry) => ({
+          name: entry.name,
+          description: entry.description,
+          starred: entry.starred,
+          files: entry.files.map(({ name, content }) => ({ name, content })),
+        })),
+      },
+      "otion-workspace",
+    );
+    notify(`Exported ${workspace.projects.length} projects`);
+  }, [downloadJson, workspace.projects, notify]);
 
   const importProject = useCallback(
     (json: string) => {
       try {
-        const parsed = JSON.parse(json) as Partial<Project>;
-        if (!Array.isArray(parsed.files) || parsed.files.length === 0) {
-          throw new Error("No files in project");
-        }
-        const next: Project = {
-          id: parsed.id ?? `p_${Date.now().toString(36)}`,
-          name: parsed.name ?? "Imported project",
-          files: parsed.files.map((file, index) =>
-            makeFile(
-              file.name || `file${index + 1}.txt`,
-              typeof file.content === "string" ? file.content : "",
+        const parsed = JSON.parse(json) as
+          | (Partial<Project> & { projects?: Partial<Project>[] })
+          | Partial<Project>[];
+        const sources: Partial<Project>[] = Array.isArray(parsed)
+          ? parsed
+          : Array.isArray((parsed as { projects?: Partial<Project>[] }).projects)
+            ? (parsed as { projects: Partial<Project>[] }).projects
+            : [parsed as Partial<Project>];
+
+        const imported: Project[] = [];
+        for (const source of sources) {
+          if (!Array.isArray(source.files) || source.files.length === 0) continue;
+          imported.push({
+            id: newProjectId(),
+            name: source.name || "Imported project",
+            description: source.description,
+            starred: source.starred === true,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            lastFileId: null,
+            files: source.files.map((file, index) =>
+              makeFile(
+                file.name || `file${index + 1}.txt`,
+                typeof file.content === "string" ? file.content : "",
+              ),
             ),
-          ),
-        };
-        setProject(next);
-        setActiveFileId(next.files[0]?.id ?? null);
+          });
+        }
+        if (!imported.length) throw new Error("No files in project");
+
+        setWorkspace((current) => ({
+          version: 2,
+          projects: [...current.projects, ...imported],
+          activeProjectId: imported[0].id,
+        }));
+        setActiveFileId(imported[0].files[0]?.id ?? null);
         setSettingsOpen(false);
+        setProjectsOpen(false);
         setChannel(newChannel());
-        notify("Project imported");
+        notify(
+          imported.length === 1
+            ? `Imported ${imported[0].name}`
+            : `Imported ${imported.length} projects`,
+        );
       } catch {
         notify("That file isn't an Otion project", "error");
       }
@@ -349,16 +625,40 @@ export default function App() {
     [notify],
   );
 
+  const importProjectFromDisk = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      importProject(await file.text());
+    };
+    input.click();
+  }, [importProject]);
+
   const resetWorkspace = useCallback(() => {
-    if (!window.confirm("Reset to a fresh workspace? Your current files will be cleared.")) return;
-    const next = starterProject();
-    setProject(next);
-    setActiveFileId(next.files[0]?.id ?? null);
-    setEntries([]);
-    setSettingsOpen(false);
-    setChannel(newChannel());
-    notify("Workspace reset");
-  }, [notify]);
+    setConfirm({
+      title: "Reset project",
+      body: `Replace every file in “${project.name}” with a fresh starter project?`,
+      confirmLabel: "Reset project",
+      danger: true,
+      run: () => {
+        const fresh = projectFromTemplateWithMeta("blank");
+        setWorkspace((current) => ({
+          ...current,
+          projects: current.projects.map((entry) =>
+            entry.id === project.id ? { ...fresh, id: entry.id, name: entry.name } : entry,
+          ),
+        }));
+        setActiveFileId(null);
+        setEntries([]);
+        setSettingsOpen(false);
+        setChannel(newChannel());
+        notify("Project reset");
+      },
+    });
+  }, [project.id, project.name, notify]);
 
   const toggleAutoRun = useCallback(() => {
     setAutoRun((value) => {
@@ -372,12 +672,12 @@ export default function App() {
   }, []);
 
   const saveNow = useCallback(() => {
-    const ok = saveProject(project);
+    const ok = saveWorkspace(workspace);
     setSaveError(!ok);
     if (ok) setSavedAt(Date.now());
     notify(ok ? "Saved locally" : "Storage full — export instead", ok ? "info" : "error");
     return ok;
-  }, [project, notify]);
+  }, [workspace, notify]);
 
   const openProblems = useCallback(() => {
     if (prefs.mobileView === "preview") patchPrefs({ mobileView: "editor" });
@@ -435,6 +735,13 @@ export default function App() {
       } else if (key === "j") {
         event.preventDefault();
         setConsoleOpen((value) => !value);
+      } else if (key === "e" && event.shiftKey) {
+        event.preventDefault();
+        setProjectsOpen(true);
+      } else if (key === "h" && event.shiftKey) {
+        event.preventDefault();
+        if (prefs.mobileView === "preview") patchPrefs({ mobileView: "editor" });
+        setSearchOpen(true);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -482,6 +789,51 @@ export default function App() {
         label: "New file",
         group: "File",
         run: openNewFile,
+      },
+      {
+        id: "projects",
+        label: "Switch project…",
+        group: "Projects",
+        keys: "⌘⇧E",
+        run: () => setProjectsOpen(true),
+      },
+      {
+        id: "new-project",
+        label: "New blank project",
+        group: "Projects",
+        run: () => {
+          const next = emptyProject(`Project ${workspace.projects.length + 1}`);
+          addProject(next);
+          notify(`Created ${next.name}`);
+        },
+      },
+      {
+        id: "duplicate-project",
+        label: `Duplicate “${project.name}”`,
+        group: "Projects",
+        run: () => {
+          duplicateProjectById(project.id);
+          notify("Project duplicated");
+        },
+      },
+      {
+        id: "star-project",
+        label: project.starred ? "Unstar this project" : "Star this project",
+        group: "Projects",
+        run: () => toggleStar(project.id),
+      },
+      {
+        id: "search-project",
+        label: "Search in project…",
+        group: "Editor",
+        keys: "⌘⇧H",
+        run: () => setSearchOpen(true),
+      },
+      {
+        id: "export-all",
+        label: `Export all ${workspace.projects.length} projects`,
+        group: "File",
+        run: exportEverything,
       },
       {
         id: "templates",
@@ -572,6 +924,16 @@ export default function App() {
         group: "Theme",
         run: () => patchPrefs({ syntax: prefs.syntax === "neon" ? "classic" : "neon" }),
       },
+      ...sortProjects(workspace.projects)
+        .filter((entry) => entry.id !== project.id)
+        .slice(0, 12)
+        .map<Command>((entry) => ({
+          id: `open-project:${entry.id}`,
+          label: entry.name,
+          group: "Open project",
+          hint: `${entry.files.length} file${entry.files.length === 1 ? "" : "s"}`,
+          run: () => openProject(entry.id),
+        })),
       {
         id: "settings",
         label: "Open settings",
@@ -588,9 +950,13 @@ export default function App() {
     return list;
   }, [
     activeFile?.name,
+    addProject,
     autoRun,
     consoleOpen,
     dispatchCommand,
+    duplicateProjectById,
+    emptyProject,
+    exportEverything,
     exportProject,
     formatActiveFile,
     goToLine,
@@ -604,17 +970,31 @@ export default function App() {
     prefs.syntax,
     prefs.theme,
     prefs.wordWrap,
+    project.id,
+    project.name,
+    project.starred,
     renameProject,
     runPreview,
     saveNow,
     toggleAutoRun,
+    toggleStar,
+    workspace.projects.length,
+    notify,
+    openProject,
+    workspace.projects,
   ]);
 
   return (
     <div className={`app app--${prefs.theme} view-${prefs.mobileView}`}>
       <TopBar
         projectName={project.name}
+        projectCount={workspace.projects.length}
         onRenameProject={renameProject}
+        onOpenProjects={() => setProjectsOpen(true)}
+        onSearch={() => {
+          if (prefs.mobileView === "preview") patchPrefs({ mobileView: "editor" });
+          setSearchOpen(true);
+        }}
         mobileView={prefs.mobileView}
         onMobileView={(view) => patchPrefs({ mobileView: view })}
         autoRun={autoRun}
@@ -630,6 +1010,17 @@ export default function App() {
         data-console={consoleOpen ? "open" : "closed"}
       >
         <aside className="sidebar" aria-label="Project files">
+          <button
+            type="button"
+            className="sidebar__project"
+            onClick={() => setProjectsOpen(true)}
+            title="Switch project (⌘⇧E)"
+          >
+            <span className="sidebar__project-dot" aria-hidden="true" />
+            <span className="sidebar__project-name">{project.name}</span>
+            <span className="sidebar__project-count">{workspace.projects.length}</span>
+            <span aria-hidden="true">⇄</span>
+          </button>
           <div className="sidebar__head">
             <span>Files</span>
             <button
@@ -693,6 +1084,29 @@ export default function App() {
           onNotify={notify}
         />
       </main>
+
+      {searchOpen ? (
+        <SearchPanel
+          project={project}
+          onJump={(fileId, line, column) => {
+            selectFile(fileId);
+            setSearchOpen(false);
+            dispatchCommand({ kind: "goToLine", line });
+            void column;
+          }}
+          onApplyReplaceAll={(changes) => {
+            setProject((current) => ({
+              ...current,
+              files: current.files.map((file) => {
+                const change = changes.find((entry) => entry.fileId === file.id);
+                return change ? { ...file, content: change.content } : file;
+              }),
+            }));
+            notify(`Replaced in ${changes.length} file${changes.length === 1 ? "" : "s"}`);
+          }}
+          onClose={() => setSearchOpen(false)}
+        />
+      ) : null}
 
       <ConsolePanel
         entries={entries}
@@ -795,6 +1209,28 @@ export default function App() {
         onNotify={notify}
       />
 
+      <ProjectsSheet
+        open={projectsOpen}
+        projects={workspace.projects}
+        activeId={project.id}
+        onClose={() => setProjectsOpen(false)}
+        onOpenProject={openProject}
+        onAddProject={(next) => {
+          addProject(next);
+          notify(`Created ${next.name}`);
+        }}
+        onRenameProject={renameProjectById}
+        onEditDetails={describeProject}
+        onDeleteProject={deleteProject}
+        onDuplicateProject={duplicateProjectById}
+        onToggleStar={toggleStar}
+        onExportProject={exportProjectById}
+        onImport={() =>
+          importProjectFromDisk()
+        }
+        onNotify={notify}
+      />
+
       <TemplatePicker
         open={templatesOpen}
         onClose={() => setTemplatesOpen(false)}
@@ -811,6 +1247,31 @@ export default function App() {
           if (prefs.mobileView === "preview") patchPrefs({ mobileView: "editor" });
         }}
       />
+
+      <Sheet
+        open={confirm !== null}
+        title={confirm?.title ?? ""}
+        onClose={() => setConfirm(null)}
+        footer={
+          <>
+            <button type="button" className="btn btn--ghost" onClick={() => setConfirm(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className={`btn ${confirm?.danger ? "btn--danger" : "btn--primary"}`}
+              onClick={() => {
+                confirm?.run();
+                setConfirm(null);
+              }}
+            >
+              {confirm?.confirmLabel ?? "Confirm"}
+            </button>
+          </>
+        }
+      >
+        <p className="sheet__lede">{confirm?.body}</p>
+      </Sheet>
 
       <PromptSheet
         open={prompt !== null}

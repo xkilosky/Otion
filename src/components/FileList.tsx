@@ -45,10 +45,7 @@ export default function FileList({
                   className="icon-btn"
                   title="Rename"
                   aria-label={`Rename ${file.name}`}
-                  onClick={() => {
-                    const next = window.prompt("Rename file", file.name);
-                    if (next?.trim()) onRename(file.id, next.trim());
-                  }}
+                  onClick={() => onRename(file.id, file.name)}
                 >
                   ✎
                 </button>
@@ -58,10 +55,7 @@ export default function FileList({
                   title="Delete"
                   aria-label={`Delete ${file.name}`}
                   disabled={files.length <= 1}
-                  onClick={() => {
-                    if (files.length <= 1) return;
-                    if (window.confirm(`Delete ${file.name}?`)) onDelete(file.id);
-                  }}
+                  onClick={() => onDelete(file.id)}
                 >
                   🗑
                 </button>
