@@ -6,9 +6,9 @@
   "description": "Otion \u2014 a mobile-first code editor for the web.",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc -b && vite build",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "typecheck": "tsc -b --noEmit",
+    "typecheck": "tsc --noEmit",
     "smoke": "esbuild scripts/smoke.tsx --bundle --platform=node --format=cjs --outfile=.smoke/smoke.cjs --loader:.css=empty --external:jsdom --log-level=error && node .smoke/smoke.cjs"
   },
   "dependencies": {
