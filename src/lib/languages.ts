@@ -6,7 +6,7 @@ import type { Extension } from "@codemirror/state";
 
 const extensionOf = (name: string) => name.split(".").pop()?.toLowerCase() ?? "";
 
-export function languageForFile(name: string): Extension {
+export function languageForFile(name: string): Extension | null {
   switch (extensionOf(name)) {
     case "js":
     case "mjs":
@@ -26,15 +26,16 @@ export function languageForFile(name: string): Extension {
     case "json":
       return json();
     default:
-      return [];
+      return null;
   }
 }
 
 /**
  * Heavier grammars are fetched on demand so the first paint on a phone stays
- * small. Returns an empty extension until the chunk resolves.
+ * small. Resolves to `null` when the file needs no lazy grammar — callers must
+ * treat `null` as "leave the current language alone", never as "remove it".
  */
-export async function lazyLanguageForFile(name: string): Promise<Extension> {
+export async function lazyLanguageForFile(name: string): Promise<Extension | null> {
   switch (extensionOf(name)) {
     case "md":
     case "markdown": {
@@ -46,7 +47,7 @@ export async function lazyLanguageForFile(name: string): Promise<Extension> {
       return python();
     }
     default:
-      return [];
+      return null;
   }
 }
 

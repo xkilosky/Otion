@@ -15,7 +15,7 @@ import App from "../src/App";
 import { formatCode } from "../src/lib/format";
 import { buildPreviewDocument } from "../src/lib/preview";
 import { projectFromTemplate, templates } from "../src/lib/templates";
-import { fileBadge } from "../src/lib/languages";
+import { fileBadge, languageForFile, lazyLanguageForFile } from "../src/lib/languages";
 import { editorTheme, paletteFor, tagSpecs } from "../src/lib/editorTheme";
 import { javascriptLanguage } from "@codemirror/lang-javascript";
 import { highlightTree, tagHighlighter } from "@lezer/highlight";
@@ -77,7 +77,7 @@ const button = (label: string) =>
 
 /* ------------------------------- pure logic ------------------------------- */
 
-function logicSuite() {
+async function logicSuite() {
   for (const template of templates) {
     const files = projectFromTemplate(template.id).files;
     for (const file of files) {
@@ -141,6 +141,16 @@ function logicSuite() {
     ["neon", "classic"].every((preset) => editorTheme("dark", preset as "neon").length === 2),
   );
 
+  // Regression: the lazy grammar loader must report "nothing to load" as null,
+  // never an empty extension — an empty array would reconfigure the language
+  // compartment and strip the grammar (which silently killed all highlighting).
+  const lazyHtml = await lazyLanguageForFile("index.html");
+  const lazyMd = await lazyLanguageForFile("notes.md");
+  say("lazy loader returns null for eager languages", lazyHtml === null, String(lazyHtml));
+  say("lazy loader loads markdown on demand", Boolean(lazyMd) && lazyMd !== null);
+  say("languageForFile returns a grammar for html", languageForFile("index.html") !== null);
+  say("languageForFile returns null for plain text", languageForFile("notes.txt") === null);
+
   say("badge mapping", fileBadge("index.html") === "HTML" && fileBadge("App.tsx") === "JS");
 
   const inferred = buildPreviewDocument(
@@ -180,6 +190,34 @@ async function appSuite() {
   const channel = /var channel = "([^"]+)"/.exec(srcdoc)?.[1] ?? "";
   say("preview document carries the file contents", srcdoc.includes(".card") && srcdoc.includes("Otion is ready"));
   say("preview channel assigned", channel.startsWith("otion-"));
+
+  // Regression: highlighting must be rendered, not just configured.
+  const cssText = Array.from(document.querySelectorAll("style"))
+    .map((node) => node.textContent ?? "")
+    .join("\n");
+  const colourOfClass = (cls: string) => {
+    const rule = new RegExp(`\\.${cls}\\s*\\{([^}]*)\\}`).exec(cssText);
+    return rule ? (/#[0-9a-f]{6}/i.exec(rule[1])?.[0] ?? "?") : "?";
+  };
+  const renderedTokens = new Map<string, string>();
+  Array.from(document.querySelectorAll(".cm-line span")).forEach((span) => {
+    const text = span.textContent ?? "";
+    if (text.trim() && !renderedTokens.has(text)) {
+      renderedTokens.set(text, colourOfClass(span.className.split(" ")[0]));
+    }
+  });
+  say("editor renders highlighted tokens", renderedTokens.size > 8, String(renderedTokens.size));
+  say(
+    "rendered HTML tag names are hot pink",
+    renderedTokens.get("main") === "#ff3d8b",
+    renderedTokens.get("main"),
+  );
+  say(
+    "rendered attributes are green",
+    renderedTokens.get("class") === "#5cff95",
+    renderedTokens.get("class"),
+  );
+  say("no token renders uncoloured", ![...renderedTokens.values()].includes("?"));
 
   dom.window.postMessage({ __otion: true, channel, level: "log", text: "hello from frame" }, "*");
   dom.window.postMessage({ __otion: true, channel: "not-ours", level: "error", text: "ignore me" }, "*");
@@ -305,7 +343,7 @@ async function restoreSuite() {
 
 async function main() {
   console.log("\n— logic —");
-  logicSuite();
+  await logicSuite();
   console.log("\n— app —");
   await appSuite();
   console.log("\n— persistence —");

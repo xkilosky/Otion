@@ -132,7 +132,7 @@ const CodeEditor = forwardRef<EditorHandle, CodeEditorProps>(function CodeEditor
           },
         },
       ]),
-      languageConf.current.of(languageForFile(fileName)),
+      languageConf.current.of(languageForFile(fileName) ?? []),
       themeConf.current.of(editorTheme(theme, syntax)),
       wrapConf.current.of(wordWrap ? EditorView.lineWrapping : []),
       EditorView.updateListener.of((update) => {
@@ -151,7 +151,9 @@ const CodeEditor = forwardRef<EditorHandle, CodeEditorProps>(function CodeEditor
 
     let disposed = false;
     void lazyLanguageForFile(fileName).then((language) => {
-      if (disposed || !language) return;
+      // `null` means this file type has no lazily-loaded grammar: keep whatever
+      // languageForFile() already installed (an empty array here would strip it).
+      if (disposed || language === null) return;
       instance.dispatch({ effects: languageConf.current.reconfigure(language) });
     });
 
@@ -179,7 +181,7 @@ const CodeEditor = forwardRef<EditorHandle, CodeEditorProps>(function CodeEditor
 
   useEffect(() => {
     view.current?.dispatch({
-      effects: languageConf.current.reconfigure(languageForFile(fileName)),
+      effects: languageConf.current.reconfigure(languageForFile(fileName) ?? []),
     });
   }, [fileName]);
 
