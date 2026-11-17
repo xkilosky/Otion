@@ -1,0 +1,16 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+.vite
+# test harness artifacts (generated locally, not shipped)
+dom-test.cjs
+dom-test.mjs
+dom-test2.cjs
+dom-test2.mjs
+dbg.cjs
+dbg2.cjs
+*.log
+*.tsbuildinfo
+.smoke
