@@ -1,5 +1,5 @@
 import { makeFile, projectFromTemplate, starterProject } from "./templates";
-import type { Project, ProjectFile, UiPrefs, Workspace } from "../types";
+import type { MobileView, Project, ProjectFile, UiPrefs, Workspace } from "../types";
 
 const LEGACY_PROJECT_KEY = "otion.project.v1";
 const WORKSPACE_KEY = "otion.workspace.v2";
@@ -8,6 +8,8 @@ const ACTIVE_KEY = "otion.activeFile.v1";
 
 /** Refuse to grow past this and surface "storage full" instead of throwing. */
 export const PROJECT_LIMIT = 24;
+
+export const MOBILE_VIEWS: MobileView[] = ["editor", "preview", "split", "preview-first"];
 
 const defaultPrefs: UiPrefs = {
   theme: "dark",
@@ -124,7 +126,9 @@ export function loadPrefs(): UiPrefs {
           ? parsed.fontSize
           : defaultPrefs.fontSize,
       wordWrap: parsed.wordWrap !== false,
-      mobileView: parsed.mobileView === "preview" ? "preview" : "editor",
+      mobileView: MOBILE_VIEWS.includes(parsed.mobileView as MobileView)
+        ? (parsed.mobileView as MobileView)
+        : "editor",
       keypad: parsed.keypad !== false,
       minimap: typeof parsed.minimap === "boolean" ? parsed.minimap : defaultPrefs.minimap,
       split:

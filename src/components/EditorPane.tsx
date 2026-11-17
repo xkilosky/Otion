@@ -32,6 +32,10 @@ interface EditorPaneProps {
   registerView: (view: EditorView | null) => void;
   /** Measured width of the selection, in characters, for the status bar. */
   onSelection: (length: number) => void;
+  /** Live problem counts from the active file's linter. */
+  onDiagnostics: (counts: { errors: number; warnings: number }) => void;
+  /** Full problem list for the bottom dock. */
+  onProblems: (problems: OutlineDiagnostic[]) => void;
   command: EditorCommand | null;
 }
 
@@ -64,6 +68,8 @@ export default function EditorPane({
   onSave,
   registerView,
   onSelection,
+  onDiagnostics,
+  onProblems,
   command,
 }: EditorPaneProps) {
   const editor = useRef<EditorHandle | null>(null);
@@ -146,6 +152,11 @@ export default function EditorPane({
     if (panel === "outline") refreshProblems();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel, activeFile?.id]);
+
+  // The dock always has the freshest lint list for the open file.
+  useEffect(() => {
+    onProblems(problems);
+  }, [problems, onProblems]);
 
   return (
     <section className="pane editor-pane" aria-label="Code editor">
@@ -247,7 +258,8 @@ export default function EditorPane({
                 setSymbols(found);
                 setBreadcrumbs(trail);
               }}
-              onDiagnostics={() => {
+              onDiagnostics={(counts) => {
+                onDiagnostics?.(counts);
                 if (panel === "outline") refreshProblems();
               }}
               onStats={onStats}

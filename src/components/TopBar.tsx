@@ -1,5 +1,12 @@
 import type { MobileView } from "../types";
 
+const MOBILE_TABS: { id: MobileView; label: string; icon: string; hint: string }[] = [
+  { id: "editor", label: "Code", icon: "❯_", hint: "Code only" },
+  { id: "split", label: "Split", icon: "⬓", hint: "Code above, preview below" },
+  { id: "preview-first", label: "Preview first", icon: "⬒", hint: "Preview above, code below" },
+  { id: "preview", label: "Preview", icon: "▣", hint: "Preview only" },
+];
+
 interface TopBarProps {
   projectName: string;
   projectCount: number;
@@ -8,6 +15,9 @@ interface TopBarProps {
   onSearch: () => void;
   mobileView: MobileView;
   onMobileView: (view: MobileView) => void;
+  /** Editor share of a stacked phone split, 0–1. */
+  split: number;
+  onSplit: (next: number) => void;
   autoRun: boolean;
   onToggleAutoRun: () => void;
   onOpenFiles: () => void;
@@ -25,6 +35,8 @@ export default function TopBar({
   onSearch,
   mobileView,
   onMobileView,
+  split,
+  onSplit,
   autoRun,
   onToggleAutoRun,
   onOpenFiles,
@@ -93,24 +105,37 @@ export default function TopBar({
         ⌕
       </button>
 
-      <div className="topbar__mobile-switch segmented" role="group" aria-label="Mobile pane">
-        <button
-          type="button"
-          className={mobileView === "editor" ? "is-active" : ""}
-          onClick={() => onMobileView("editor")}
-          aria-pressed={mobileView === "editor"}
-        >
-          Code
-        </button>
-        <button
-          type="button"
-          className={mobileView === "preview" ? "is-active" : ""}
-          onClick={() => onMobileView("preview")}
-          aria-pressed={mobileView === "preview"}
-        >
-          Preview
-        </button>
+      <div className="topbar__mobile-switch segmented segmented--sm" role="group" aria-label="Phone layout">
+        {MOBILE_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={mobileView === tab.id ? "is-active" : ""}
+            onClick={() => onMobileView(tab.id)}
+            aria-pressed={mobileView === tab.id}
+            title={tab.hint}
+          >
+            <span aria-hidden="true">{tab.icon}</span>
+            <span className="visually-hidden">{tab.label}</span>
+          </button>
+        ))}
       </div>
+
+      {mobileView === "split" || mobileView === "preview-first" ? (
+        <label className="topbar__split" title="Drag to resize both panes">
+          <span className="visually-hidden">Editor height share</span>
+          <input
+            type="range"
+            min={22}
+            max={78}
+            step={2}
+            value={Math.round(split * 100)}
+            onChange={(event) => onSplit(Number(event.target.value) / 100)}
+            aria-label="Editor height share"
+          />
+          <span className="topbar__split-value">{Math.round(split * 100)}%</span>
+        </label>
+      ) : null}
 
       <div className="topbar__actions">
         <button

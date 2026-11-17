@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import TopBar from "./components/TopBar";
 import EditorPane, { type EditorCommand } from "./components/EditorPane";
 import PreviewPane from "./components/PreviewPane";
-import ConsolePanel from "./components/ConsolePanel";
+import BottomDock, { type Problem } from "./components/BottomDock";
+import type { OutlineDiagnostic } from "./components/OutlinePanel";
 import FileList from "./components/FileList";
 import Sheet from "./components/Sheet";
 import SettingsSheet from "./components/SettingsSheet";
@@ -55,7 +56,6 @@ export default function App() {
   const [reloadToken, setReloadToken] = useState(0);
   const [channel, setChannel] = useState(newChannel);
   const [entries, setEntries] = useState<ConsoleEntry[]>([]);
-  const [consoleOpen, setConsoleOpen] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
@@ -99,6 +99,10 @@ export default function App() {
   const [command, setCommand] = useState<EditorCommand | null>(null);
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [problems, setProblems] = useState({ errors: 0, warnings: 0 });
+  const [problemList, setProblemList] = useState<OutlineDiagnostic[]>([]);
+  /** Which bottom dock is showing: output, problems, or closed. */
+  const [dock, setDock] = useState<"output" | "problems" | "closed">("closed");
 
   const { toast, notify } = useToast();
   const channelRef = useRef(channel);
@@ -209,13 +213,27 @@ export default function App() {
     return () => window.removeEventListener("message", onMessage);
   }, []);
 
+  const dockProblems = useMemo<Problem[]>(
+    () =>
+      problemList.map((entry, index) => ({
+        id: `${project.id}-${index}`,
+        fileId: project.id,
+        fileName: activeFile?.name ?? "—",
+        line: (entry as { line?: number }).line ?? 1,
+        severity: (entry.severity === "error" ? "error" : "warning") as Problem["severity"],
+        message: entry.message,
+      })),
+    [problemList, project.id, activeFile?.name],
+  );
+
   const errorCount = useMemo(
     () => entries.filter((entry) => entry.level === "error").length,
     [entries],
   );
 
+  // A thrown error should surface itself: open the Output face of the dock.
   useEffect(() => {
-    if (errorCount > 0) setConsoleOpen(true);
+    if (errorCount > 0) setDock((current) => (current === "closed" ? "output" : current));
   }, [errorCount]);
 
   // The on-screen keyboard shrinks the visual viewport on phones; mirror that so
@@ -390,7 +408,7 @@ export default function App() {
       }));
       setActiveFileId(next.files[0]?.id ?? null);
       setEntries([]);
-      setConsoleOpen(false);
+      setDock("closed");
       setTemplatesOpen(false);
       setProjectsOpen(false);
       setChannel(newChannel());
@@ -416,7 +434,7 @@ export default function App() {
       });
       setActiveFileId(null);
       setEntries([]);
-      setConsoleOpen(false);
+      setDock("closed");
       setProjectsOpen(false);
       setChannel(newChannel());
     },
@@ -748,7 +766,7 @@ export default function App() {
         openProblems();
       } else if (key === "j") {
         event.preventDefault();
-        setConsoleOpen((value) => !value);
+        setDock((current) => (current === "output" ? "closed" : "output"));
       } else if (key === "e" && event.shiftKey) {
         event.preventDefault();
         setProjectsOpen(true);
@@ -924,10 +942,17 @@ export default function App() {
       },
       {
         id: "console",
-        label: consoleOpen ? "Hide console" : "Show console",
+        label: dock === "output" ? "Hide output" : "Show output",
         group: "View",
         keys: "⌘J",
-        run: () => setConsoleOpen((value) => !value),
+        run: () => setDock((current) => (current === "output" ? "closed" : "output")),
+      },
+      {
+        id: "problems-dock",
+        label: dock === "problems" ? "Hide problems panel" : "Show problems panel",
+        group: "View",
+        keys: "⌘⇧M",
+        run: () => setDock((current) => (current === "problems" ? "closed" : "problems")),
       },
       {
         id: "zen",
@@ -994,7 +1019,7 @@ export default function App() {
     activeFile?.name,
     addProject,
     autoRun,
-    consoleOpen,
+    dock,
     dispatchCommand,
     duplicateProjectById,
     emptyProject,
@@ -1045,6 +1070,8 @@ export default function App() {
         }}
         mobileView={prefs.mobileView}
         onMobileView={(view) => patchPrefs({ mobileView: view })}
+        split={clampSplit(prefs.split)}
+        onSplit={setSplit}
         autoRun={autoRun}
         onToggleAutoRun={toggleAutoRun}
         onOpenFiles={() => setFilesOpen(true)}
@@ -1057,7 +1084,7 @@ export default function App() {
       <main
         className="workspace"
         data-view={prefs.mobileView}
-        data-console={consoleOpen ? "open" : "closed"}
+        data-dock={dock}
       >
         <aside className="sidebar" aria-label="Project files">
           <button
@@ -1150,6 +1177,8 @@ export default function App() {
             editorViewRef.current = view;
           }}
           onSelection={setSelectionLength}
+          onDiagnostics={(counts) => setProblems(counts)}
+          onProblems={setProblemList}
           command={command}
         />
 
@@ -1189,12 +1218,20 @@ export default function App() {
         />
       ) : null}
 
-      <ConsolePanel
+      <BottomDock
+        tab={dock}
+        onTab={setDock}
         entries={entries}
-        open={consoleOpen}
         errorCount={errorCount}
-        onToggle={() => setConsoleOpen((value) => !value)}
+        problems={dockProblems}
+        problemsSummary={problems}
         onClear={() => setEntries([])}
+        onOpenProblem={(problem) => {
+          const target = project.files.find((file) => file.id === problem.fileId);
+          if (target) selectFile(target.id);
+          setDock("closed");
+          dispatchCommand({ kind: "problems" });
+        }}
       />
 
       <StatusBar

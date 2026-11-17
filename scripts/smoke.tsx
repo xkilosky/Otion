@@ -299,7 +299,8 @@ async function appSuite() {
   say("editor renders", !!document.querySelector(".cm-editor"));
   say("preview iframe renders", !!document.querySelector("iframe.preview-frame"));
   say("keypad renders", document.querySelectorAll(".keypad .key").length > 20);
-  say("console dock renders", !!document.querySelector(".console__bar"));
+  say("output/problems dock renders", !!document.querySelector(".dock__tabs"));
+  say("dock offers output and problems tabs", document.querySelectorAll(".dock__tab").length === 2);
 
   const srcdoc = document.querySelector("iframe.preview-frame")!.getAttribute("srcdoc") ?? "";
   const channel = /var channel = "([^"]+)"/.exec(srcdoc)?.[1] ?? "";
@@ -337,24 +338,46 @@ async function appSuite() {
   dom.window.postMessage({ __otion: true, channel, level: "log", text: "hello from frame" }, "*");
   dom.window.postMessage({ __otion: true, channel: "not-ours", level: "error", text: "ignore me" }, "*");
   await sleep(120);
-  (document.querySelector(".console__bar") as HTMLElement).click();
-  await sleep(150);
+  (document.querySelectorAll(".dock__tab")[0] as HTMLElement).click();
+  await sleep(200);
+  say("output tab opens the dock", !!document.querySelector(".dock.is-open"));
   const logs = Array.from(document.querySelectorAll(".log__text")).map((node) => node.textContent);
   say("console bridge forwards logs", logs.includes("hello from frame"), JSON.stringify(logs));
   say("console bridge ignores other channels", !logs.includes("ignore me"));
 
+  (document.querySelectorAll(".dock__tab")[1] as HTMLElement).click();
+  await sleep(250);
+  say("problems tab switches the same dock", !!document.querySelector(".dock__problem, .dock__empty"));
+  say("problems tab is marked active", (document.querySelectorAll(".dock__tab")[1] as HTMLElement).className.includes("is-active"));
+  (document.querySelectorAll(".dock__tab")[1] as HTMLElement).click();
+  await sleep(200);
+  say("clicking the active tab closes the dock", !document.querySelector(".dock.is-open"));
+
   // mobile Code/Preview switch
-  const previewTab = Array.from(document.querySelectorAll(".topbar__mobile-switch button")).find(
-    (element) => element.textContent === "Preview",
-  ) as HTMLElement;
-  previewTab.click();
-  await sleep(150);
+  const mobileTab = (index: number) =>
+    document.querySelectorAll(".topbar__mobile-switch button")[index] as HTMLElement | undefined;
+
+  say("phone layout offers four modes", document.querySelectorAll(".topbar__mobile-switch button").length === 4);
+  // tabs: 0 code · 1 split · 2 preview-first · 3 preview
+  mobileTab(3)!.click();
+  await sleep(200);
   say("mobile switch shows preview", !!document.querySelector(".app.view-preview"));
   say("mobile view persists", JSON.parse(localStorage.getItem("otion.prefs.v1") ?? "{}").mobileView === "preview");
-  (Array.from(document.querySelectorAll(".topbar__mobile-switch button")).find(
-    (element) => element.textContent === "Code",
-  ) as HTMLElement).click();
-  await sleep(100);
+
+  mobileTab(1)!.click();
+  await sleep(250);
+  say("stacked split mode applies", !!document.querySelector(".app.view-split"));
+  say("stacked split keeps both panes in the tree", !!document.querySelector(".editor-pane") && !!document.querySelector(".preview-pane"));
+  say("split mode exposes a divider", !!document.querySelector(".splitter"));
+  say("split pref persists for the phone", JSON.parse(localStorage.getItem("otion.prefs.v1") ?? "{}").mobileView === "split");
+
+  mobileTab(2)!.click();
+  await sleep(200);
+  say("preview-first mode applies", !!document.querySelector(".app.view-preview-first"));
+
+  mobileTab(0)!.click();
+  await sleep(150);
+  say("back to code-only mode", !!document.querySelector(".app.view-editor"));
 
   // settings + theme
   button("Settings")!.click();

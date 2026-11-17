@@ -32,7 +32,8 @@ export type ThemeName = "dark" | "light";
 
 export type SyntaxName = "neon" | "classic";
 
-export type MobileView = "editor" | "preview";
+/** Phone layout: one pane, a stacked split, or the other pane first. */
+export type MobileView = "editor" | "preview" | "split" | "preview-first";
 
 export interface UiPrefs {
   theme: ThemeName;
