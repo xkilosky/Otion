@@ -4,7 +4,9 @@
 
 A mobile-first code editor that runs entirely in the browser. Write HTML, CSS and
 JavaScript, then watch it run in a sandboxed live preview — with console output
-piped back into the editor.
+piped back into the editor. The editing surface is VS Code-class: completions,
+snippets, Emmet, live problems, an outline, breadcrumbs, a minimap, a command
+palette and a real status bar — all sized for a thumb.
 
 ```
 ┌──────────────────────────────────────────────────────┐
@@ -55,6 +57,30 @@ piped back into the editor.
 - **Editor that behaves.** CodeMirror 6 with syntax highlighting, bracket
   matching/closing, autocomplete, find, code folding, line numbers, word-wrap and
   a keyboard-safe caret.
+- **Completions and snippets** that know the file type: HTML tags (with attribute
+  hints), CSS properties and at-rules, JS globals plus snippet templates
+  (`log`, `fn`, `afn`, `fori`, `try`, `imp`, `sel`, `flex`, `grid`, …).
+- **Emmet on Tab.** `ul>li*3`, `section.hero>h1{Title}+p.sub`, `div>div^p`,
+  `img.hero`, `a#top`, `input[type=email]` — expanded in place, with sensible
+  implied attributes (`href`, `src`, `type`) so the result is usable immediately.
+- **Live problems.** In-browser linters for HTML (unbalanced/mismatched tags),
+  CSS (missing colons/braces), JSON (parse errors with position) and JavaScript
+  (syntax errors from the parser), shown as gutter markers, squiggles, a Problems
+  list and F8/⇧F8 navigation. Errors and warnings are counted in the status bar.
+- **Outline, breadcrumbs, minimap.** A symbol outline for HTML (structure, ids,
+  classes), CSS (selectors), JS/TS (functions, classes, constants) and Markdown
+  (headings); breadcrumbs that follow the caret; and a minimap you can drag to
+  scroll.
+- **Command palette.** `⌘`/`Ctrl` + `⇧` + `P` (or just `⌘P`) lists every action —
+  run, save, format, search, problems, go-to-line, theme, syntax, minimap, wrap,
+  console — and `#name` switches files. On phones the `⋯` chip opens the same
+  actions as a touch tray.
+- **Line-level power tools.** Multi-cursor (`⌘D` select-next-occurrence,
+  `⌥⌘↑/↓` add cursor), move lines (`⌥↑/↓`), duplicate (`⇧⌘D`), delete line
+  (`⇧⌘K`), toggle comment (`⌘/` — HTML, CSS and JS aware), jump to matching
+  bracket, and go-to-line.
+- **Status bar.** Language, cursor position, selection size, line/word counts,
+  problem badges, live-preview state and autosave status — each one tappable.
 - **Format** for the active file — a dependency-free formatter: brace/bracket
   re-indentation for JS/CSS/JSON (string- and template-literal aware) and tag
   indentation for HTML, with `<script>`/`<style>`/`<pre>` bodies left untouched.
@@ -71,8 +97,16 @@ piped back into the editor.
 | --- | --- |
 | `⌘`/`Ctrl` + `↵` | Run / refresh the preview |
 | `⌘`/`Ctrl` + `S` | Save to this browser |
-| `⌘`/`Ctrl` + `⇧` + `F` | Format the current file |
-| `⌘`/`Ctrl` + `F` | Find in file |
+| `⌘`/`Ctrl` + `⇧` + `P` | Command palette (also `⌘P`) |
+| `⌘`/`Ctrl` + `⇧` + `F` | Format the current file (also `⌥⌘L`) |
+| `⌘`/`Ctrl` + `F` | Find in file (`⌘G` — go to line) |
+| `Tab` | Expand an Emmet abbreviation, else accept a completion |
+| `⌥` + `↑` / `↓` | Move the current line |
+| `⇧⌘D` / `⇧⌘K` | Duplicate line / delete line |
+| `⌘D` | Select the next occurrence (multi-cursor) |
+| `⌘⇧M` / `⌘⇧O` / `⌘⇧F8` | Toggle minimap / outline / problems |
+| `F8` / `⇧F8` | Next / previous problem |
+| `⌘J` | Toggle the console dock |
 
 ## Getting started
 
@@ -87,7 +121,10 @@ npm run smoke    # headless checks: bundling, console bridge, format, persistenc
 `npm run smoke` boots the real app in jsdom (CodeMirror prints a harmless
 "Window is not defined" warning there, which the runner filters out) and verifies
 the preview bundler, the console bridge and channel filtering, mobile view
-switching, template loading, duplicate-name handling and restore-from-storage.
+switching, template loading, duplicate-name handling and restore-from-storage —
+plus the IDE layer: Emmet expansion (10 cases), symbol/breadcrumb extraction,
+every linter, completion wiring, and the command palette, outline panel,
+minimap, status bar and touch action tray against the rendered DOM.
 
 ## Project layout
 
@@ -97,7 +134,12 @@ src/
   components/
     TopBar.tsx            brand, mobile Code/Preview switch, actions
     EditorPane.tsx        tabs, editor, keypad and snippet tray
-    CodeEditor.tsx        CodeMirror 6 view + imperative insert API
+    CodeEditor.tsx        CodeMirror 6 view, keymap, imperative handle
+    CommandPalette.tsx    ⌘⇧P command + file switcher
+    OutlinePanel.tsx      symbols + problems tabs
+    Minimap.tsx           document map with a draggable viewport
+    StatusBar.tsx         language, cursor, counts, problems, autosave
+    PromptSheet.tsx       keyboard-safe prompt (go-to-line, rename)
     PreviewPane.tsx       debounced live preview, widths, copy/reload
     ConsolePanel.tsx      console dock
     FileList.tsx          file rows with rename/delete
@@ -112,6 +154,11 @@ src/
     languages.ts          grammar mapping, badges, keypad catalog
     editorTheme.ts        Neon/Classic syntax palettes + dark/light chrome
     format.ts             brace-aware re-indenter
+    diagnostics.ts        HTML/CSS/JSON/JS linters
+    autocomplete.ts       tag/CSS/JS completions + snippet catalogs
+    emmet.ts              abbreviation expander
+    symbols.ts            outline symbols + breadcrumbs
+    editorExtensions.ts   Tab/Emmet keymap, placeholder, sizing, lint wiring
     storage.ts            localStorage read/write with fallbacks
   styles/global.css       design tokens + mobile-first layout
 ```
