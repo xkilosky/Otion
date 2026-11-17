@@ -11,6 +11,9 @@ interface SettingsSheetProps {
   onImport: (projectJson: string) => void;
   onReset: () => void;
   onOpenTemplates: () => void;
+  onOpenProjects: () => void;
+  onExportAll: () => void;
+  projectCount: number;
   onNotify: (message: string) => void;
 }
 
@@ -23,6 +26,9 @@ export default function SettingsSheet({
   onImport,
   onReset,
   onOpenTemplates,
+  onOpenProjects,
+  onExportAll,
+  projectCount,
   onNotify,
 }: SettingsSheetProps) {
   const download = () => {
@@ -183,24 +189,34 @@ export default function SettingsSheet({
       </div>
 
       <div className="settings-group">
-        <h3>Project</h3>
+        <h3>Projects · {projectCount}</h3>
         <div className="button-row">
+          <button type="button" className="btn btn--ghost" onClick={onOpenProjects}>
+            Switch project
+          </button>
           <button type="button" className="btn btn--ghost" onClick={onOpenTemplates}>
             New from template
           </button>
+        </div>
+        <div className="button-row">
           <button type="button" className="btn btn--ghost" onClick={download}>
-            Export JSON
+            Export this project
+          </button>
+          <button type="button" className="btn btn--ghost" onClick={onExportAll}>
+            Export all
           </button>
           <button type="button" className="btn btn--ghost" onClick={pickFile}>
             Import JSON
           </button>
+        </div>
+        <div className="button-row">
           <button type="button" className="btn btn--danger" onClick={onReset}>
-            Reset workspace
+            Reset this project
           </button>
         </div>
         <p className="settings-note">
-          Projects live in this browser's storage. Export to keep a backup or move between
-          devices.
+          Everything lives in this browser's storage — no account, no server. Export to keep a
+          backup or move between devices; imports can be a single project or a whole workspace.
         </p>
       </div>
 

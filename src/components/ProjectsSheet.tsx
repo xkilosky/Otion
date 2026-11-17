@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import Sheet from "./Sheet";
 import { templates } from "../lib/templates";
 import {
-  duplicateProject,
   emptyProject,
   formatBytes,
   projectBytes,
@@ -317,6 +316,3 @@ export default function ProjectsSheet({
     </Sheet>
   );
 }
-
-/** Re-exported so App can build a duplicate without importing the store twice. */
-export { duplicateProject };

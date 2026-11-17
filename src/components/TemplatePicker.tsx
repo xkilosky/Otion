@@ -11,8 +11,8 @@ export default function TemplatePicker({ open, onClose, onPick }: TemplatePicker
   return (
     <Sheet open={open} title="New project" onClose={onClose} size="tall">
       <p className="sheet__lede">
-        Start from a template, or keep building on what you have — your current files are
-        replaced only after you pick.
+        Every template opens as its own project — what you're working on stays exactly where it
+        is. Your projects live in the ▦ switcher.
       </p>
       <div className="template-grid">
         {templates.map((template) => (

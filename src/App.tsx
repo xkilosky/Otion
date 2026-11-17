@@ -1206,6 +1206,12 @@ export default function App() {
           setSettingsOpen(false);
           setTemplatesOpen(true);
         }}
+        onOpenProjects={() => {
+          setSettingsOpen(false);
+          setProjectsOpen(true);
+        }}
+        onExportAll={exportEverything}
+        projectCount={workspace.projects.length}
         onNotify={notify}
       />
 
