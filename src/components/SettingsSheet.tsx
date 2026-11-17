@@ -1,4 +1,5 @@
 import Sheet from "./Sheet";
+import { presetSwatches } from "../lib/editorTheme";
 import type { UiPrefs } from "../types";
 
 interface SettingsSheetProps {
@@ -69,6 +70,46 @@ export default function SettingsSheet({
             >
               Light
             </button>
+          </div>
+        </div>
+
+        <div className="setting-row setting-row--stack">
+          <div>
+            <strong>Syntax colours</strong>
+            <p>
+              {prefs.syntax === "neon"
+                ? "Saturated neon: pink JSX tags, green attributes, acid-yellow strings."
+                : "Muted, classic editor palette."}
+            </p>
+          </div>
+          <div className="syntax-picker" role="radiogroup" aria-label="Syntax colour preset">
+            {(
+              [
+                { id: "neon", label: "Neon" },
+                { id: "classic", label: "Classic" },
+              ] as const
+            ).map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                role="radio"
+                aria-checked={prefs.syntax === preset.id}
+                className={`syntax-option ${prefs.syntax === preset.id ? "is-active" : ""}`}
+                onClick={() => onChange({ syntax: preset.id })}
+              >
+                <span className="syntax-option__dots" aria-hidden="true">
+                  {presetSwatches(preset.id, prefs.theme).map((color, index) => (
+                    <i key={index} style={{ background: color }} />
+                  ))}
+                </span>
+                <span className="syntax-option__label">{preset.label}</span>
+                {prefs.syntax === preset.id ? (
+                  <span className="syntax-option__check" aria-hidden="true">
+                    ✓
+                  </span>
+                ) : null}
+              </button>
+            ))}
           </div>
         </div>
 

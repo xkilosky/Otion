@@ -38,7 +38,7 @@ import {
 } from "@codemirror/language";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { languageForFile, lazyLanguageForFile } from "../lib/languages";
-import { editorTheme } from "../lib/editorTheme";
+import { editorTheme, type SyntaxPreset } from "../lib/editorTheme";
 
 export interface EditorHandle {
   insert: (text: string) => void;
@@ -53,6 +53,7 @@ interface CodeEditorProps {
   fileName: string;
   value: string;
   theme: "dark" | "light";
+  syntax: SyntaxPreset;
   fontSize: number;
   wordWrap: boolean;
   onChange: (value: string) => void;
@@ -61,7 +62,7 @@ interface CodeEditorProps {
 }
 
 const CodeEditor = forwardRef<EditorHandle, CodeEditorProps>(function CodeEditor(
-  { fileName, value, theme, fontSize, wordWrap, onChange, onFormat, onCursor },
+  { fileName, value, theme, syntax, fontSize, wordWrap, onChange, onFormat, onCursor },
   ref,
 ) {
   const host = useRef<HTMLDivElement | null>(null);
@@ -132,7 +133,7 @@ const CodeEditor = forwardRef<EditorHandle, CodeEditorProps>(function CodeEditor
         },
       ]),
       languageConf.current.of(languageForFile(fileName)),
-      themeConf.current.of(editorTheme(theme)),
+      themeConf.current.of(editorTheme(theme, syntax)),
       wrapConf.current.of(wordWrap ? EditorView.lineWrapping : []),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) onChangeRef.current(update.state.doc.toString());
@@ -184,9 +185,9 @@ const CodeEditor = forwardRef<EditorHandle, CodeEditorProps>(function CodeEditor
 
   useEffect(() => {
     view.current?.dispatch({
-      effects: themeConf.current.reconfigure(editorTheme(theme)),
+      effects: themeConf.current.reconfigure(editorTheme(theme, syntax)),
     });
-  }, [theme]);
+  }, [theme, syntax]);
 
   useEffect(() => {
     view.current?.dispatch({

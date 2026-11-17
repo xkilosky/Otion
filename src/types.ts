@@ -14,10 +14,13 @@ export interface Project {
 
 export type ThemeName = "dark" | "light";
 
+export type SyntaxName = "neon" | "classic";
+
 export type MobileView = "editor" | "preview";
 
 export interface UiPrefs {
   theme: ThemeName;
+  syntax: SyntaxName;
   fontSize: number;
   wordWrap: boolean;
   mobileView: MobileView;

@@ -42,8 +42,16 @@ piped back into the editor.
 - **Console + error capture.** `console.*`, uncaught errors and unhandled promise
   rejections from the preview are posted to the app, filtered by a per-session
   channel, and shown in a dock that opens itself when something throws.
-- **Templates.** *Hello Otion*, *Landing page* (responsive marketing site) and
-  *Dot Rush* (a 30-second touch game).
+- **Saturated syntax colours.** The default **Neon** palette is tuned for
+  contrast: magenta keywords, hot-pink JSX/HTML tags, green attributes,
+  acid-yellow attribute values and strings, cyan identifiers. Switch to
+  **Classic** in Settings for the muted palette; both work in dark and light.
+  Colour roles live in `src/lib/editorTheme.ts`, so a tag is never styled by
+  accident — every CodeMirror token (`tagName`, `attributeName`,
+  `attributeValue`, `content`, …) maps to a named role.
+- **Templates.** *Hello Otion*, *Landing page* (responsive marketing site),
+  *Dot Rush* (a 30-second touch game) and *JSX navigation* (a saturated-syntax
+  showcase with a working hamburger menu).
 - **Editor that behaves.** CodeMirror 6 with syntax highlighting, bracket
   matching/closing, autocomplete, find, code folding, line numbers, word-wrap and
   a keyboard-safe caret.
@@ -54,7 +62,8 @@ piped back into the editor.
   of the bundled preview.
 - **Persistent workspace.** Project and preferences autosave to `localStorage`;
   export/import a project as JSON to move between devices.
-- **Dark and light themes**, adjustable font size, installable as a PWA.
+- **Dark and light themes**, two syntax presets, adjustable font size,
+  installable as a PWA.
 
 ## Keyboard shortcuts
 
@@ -101,7 +110,7 @@ src/
     preview.ts            file bundling + runtime console bridge
     templates.ts          starter projects
     languages.ts          grammar mapping, badges, keypad catalog
-    editorTheme.ts        dark/light CodeMirror themes
+    editorTheme.ts        Neon/Classic syntax palettes + dark/light chrome
     format.ts             brace-aware re-indenter
     storage.ts            localStorage read/write with fallbacks
   styles/global.css       design tokens + mobile-first layout

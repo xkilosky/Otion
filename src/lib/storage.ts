@@ -7,6 +7,7 @@ const ACTIVE_KEY = "otion.activeFile.v1";
 
 const defaultPrefs: UiPrefs = {
   theme: "dark",
+  syntax: "neon",
   fontSize: 13.5,
   wordWrap: true,
   mobileView: "editor",
@@ -51,6 +52,7 @@ export function loadPrefs(): UiPrefs {
     const parsed = JSON.parse(raw) as Partial<UiPrefs>;
     return {
       theme: parsed.theme === "light" ? "light" : "dark",
+      syntax: parsed.syntax === "classic" ? "classic" : "neon",
       fontSize:
         typeof parsed.fontSize === "number" && parsed.fontSize >= 10 && parsed.fontSize <= 24
           ? parsed.fontSize

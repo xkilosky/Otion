@@ -485,6 +485,162 @@ function endGame() {
 document.getElementById("play").addEventListener("click", startGame);
 `;
 
+const componentIndexJsx = `export default function Navigation({ open, onToggle, items }) {
+  return (
+    <Section id="navigation">
+      <NavBar>
+        <HamburgerMenu onClick={onToggle} isOpen={open} />
+        <Menu>
+          {items.map((item) => (
+            <MenuItem key={item.id} onClick={item.onSelect} label={item.label}>
+              {item.label}
+            </MenuItem>
+          ))}
+        </Menu>
+      </NavBar>
+    </Section>
+  );
+}
+`;
+
+const jsxHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Navigation</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <nav class="navbar" id="navbar">
+    <button class="hamburger" id="hamburger" aria-label="Toggle menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+    <ul class="menu" id="menu">
+      <li><a href="#">Home</a></li>
+      <li><a href="#">Projects</a></li>
+      <li><a href="#">About</a></li>
+      <li><a href="#">Contact</a></li>
+    </ul>
+  </nav>
+
+  <main>
+    <h1>Navigation</h1>
+    <p>Open <code>Navigation.jsx</code> to see the JSX this markup mirrors.</p>
+  </main>
+
+  <script src="navigation.js"></script>
+</body>
+</html>
+`;
+
+const jsxCss = `* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  color: #f2f4ff;
+  background: radial-gradient(120% 90% at 0% 0%, #1b1030, #08080f 62%);
+}
+
+.navbar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 61, 139, 0.25);
+  background: rgba(10, 8, 18, 0.82);
+  backdrop-filter: blur(12px);
+}
+
+.hamburger {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 40px;
+  height: 40px;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 61, 139, 0.5);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.hamburger span {
+  display: block;
+  height: 2px;
+  border-radius: 2px;
+  background: #ff3d8b;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.hamburger[aria-expanded="true"] span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+.hamburger[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
+.hamburger[aria-expanded="true"] span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+.menu {
+  display: none;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.menu.is-open { display: flex; flex-direction: column; }
+
+.menu a {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: #d8ff66;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.menu a:hover { background: rgba(216, 255, 102, 0.12); }
+
+main { padding: 32px 20px; }
+
+h1 { margin: 0 0 8px; font-size: 30px; letter-spacing: -0.03em; }
+
+p { color: #b6bdd6; line-height: 1.6; }
+
+code {
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #4fe3ff;
+  background: rgba(79, 227, 255, 0.12);
+}
+
+@media (min-width: 640px) {
+  .hamburger { display: none; }
+  .menu { display: flex; flex-direction: row; }
+}
+`;
+
+const jsxJs = `const hamburger = document.getElementById("hamburger");
+const menu = document.getElementById("menu");
+
+hamburger.addEventListener("click", () => {
+  const open = menu.classList.toggle("is-open");
+  hamburger.setAttribute("aria-expanded", String(open));
+  console.log(open ? "menu opened" : "menu closed");
+});
+
+menu.addEventListener("click", (event) => {
+  const link = event.target.closest("a");
+  if (!link) return;
+  console.log("navigate to", link.textContent);
+});
+
+console.log("navigation ready");
+`;
+
 export const templates: Template[] = [
   {
     id: "blank",
@@ -517,6 +673,18 @@ export const templates: Template[] = [
       { name: "index.html", content: gameHtml },
       { name: "styles.css", content: gameCss },
       { name: "game.js", content: gameJs },
+    ],
+  },
+  {
+    id: "jsx",
+    name: "JSX navigation",
+    tagline: "Saturated syntax showcase",
+    swatch: ["#ff3d8b", "#4fe3ff"],
+    files: () => [
+      { name: "index.html", content: jsxHtml },
+      { name: "styles.css", content: jsxCss },
+      { name: "Navigation.jsx", content: componentIndexJsx },
+      { name: "navigation.js", content: jsxJs },
     ],
   },
 ];

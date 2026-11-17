@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import CodeEditor, { type EditorHandle } from "./CodeEditor";
 import { fileBadge, KEYPAD_LINES, KEYPAD_SYMBOLS } from "../lib/languages";
 import { formatKind } from "../lib/format";
+import type { SyntaxPreset } from "../lib/editorTheme";
 import type { ProjectFile } from "../types";
 
 interface EditorPaneProps {
   files: ProjectFile[];
   activeFile: ProjectFile | null;
   theme: "dark" | "light";
+  syntax: SyntaxPreset;
   fontSize: number;
   wordWrap: boolean;
   keypad: boolean;
@@ -26,6 +28,7 @@ export default function EditorPane({
   files,
   activeFile,
   theme,
+  syntax,
   fontSize,
   wordWrap,
   keypad,
@@ -125,6 +128,7 @@ export default function EditorPane({
             fileName={activeFile.name}
             value={activeFile.content}
             theme={theme}
+            syntax={syntax}
             fontSize={fontSize}
             wordWrap={wordWrap}
             onChange={onChange}

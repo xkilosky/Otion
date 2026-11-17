@@ -16,6 +16,9 @@ import { formatCode } from "../src/lib/format";
 import { buildPreviewDocument } from "../src/lib/preview";
 import { projectFromTemplate, templates } from "../src/lib/templates";
 import { fileBadge } from "../src/lib/languages";
+import { editorTheme, paletteFor, tagSpecs } from "../src/lib/editorTheme";
+import { javascriptLanguage } from "@codemirror/lang-javascript";
+import { highlightTree, tagHighlighter } from "@lezer/highlight";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -107,6 +110,37 @@ function logicSuite() {
     JSON.stringify(markup),
   );
 
+  // --- saturated "neon" syntax: JSX tags pink, attributes green, values yellow
+  const neon = paletteFor("dark", "neon");
+  const specs = tagSpecs(neon).map((spec, index) => ({ ...spec, class: `t${index}` }));
+  const colourOf = new Map(specs.map((spec) => [spec.class, spec.color]));
+  const highlighter = tagHighlighter(specs.map(({ tag, class: cls }) => ({ tag, class: cls })));
+  const jsx = `export default function Navigation() {
+  return (
+    <Section id="navigation">
+      <NavBar />
+    </Section>
+  );
+}`;
+  const tree = javascriptLanguage.parser.configure({ dialect: "jsx" }).parse(jsx);
+  const tokens: Record<string, string> = {};
+  highlightTree(tree, highlighter, (from, to, classes) => {
+    const text = jsx.slice(from, to).trim();
+    if (text && !tokens[text]) tokens[text] = colourOf.get(classes.split(" ")[0]) ?? "unmapped";
+  });
+
+  say("neon: export keyword is saturated magenta", tokens["export"] === "#ff4fd8", tokens["export"]);
+  say("neon: JSX tag names are hot pink", tokens["Section"] === "#ff3d8b", tokens["Section"]);
+  say("neon: JSX attributes are green", tokens["id"] === "#5cff95", tokens["id"]);
+  say("neon: attribute values are acid yellow", tokens['"navigation"'] === "#d8ff66", tokens['"navigation"']);
+  say("neon: identifiers are cyan", tokens["Navigation"] === "#4fe3ff", tokens["Navigation"]);
+  say("neon: every JSX token is mapped", !Object.values(tokens).includes("unmapped"), JSON.stringify(tokens));
+  say("classic preset differs", paletteFor("dark", "classic").tag !== neon.tag);
+  say(
+    "both presets build extensions",
+    ["neon", "classic"].every((preset) => editorTheme("dark", preset as "neon").length === 2),
+  );
+
   say("badge mapping", fileBadge("index.html") === "HTML" && fileBadge("App.tsx") === "JS");
 
   const inferred = buildPreviewDocument(
@@ -178,6 +212,19 @@ async function appSuite() {
   ) as HTMLElement).click();
   await sleep(150);
   say("theme switches to light", document.documentElement.dataset.theme === "light");
+  (document.querySelector(".sheet__head .icon-btn") as HTMLElement).click();
+  await sleep(150);
+
+  // syntax preset picker
+  button("Settings")!.click();
+  await sleep(200);
+  const classic = Array.from(document.querySelectorAll(".syntax-option")).find(
+    (element) => element.textContent?.includes("Classic"),
+  ) as HTMLElement;
+  say("syntax picker offers both presets", document.querySelectorAll(".syntax-option").length === 2);
+  classic.click();
+  await sleep(200);
+  say("syntax preset applies", JSON.parse(localStorage.getItem("otion.prefs.v1") ?? "{}").syntax === "classic");
   (document.querySelector(".sheet__head .icon-btn") as HTMLElement).click();
   await sleep(150);
 

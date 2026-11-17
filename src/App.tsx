@@ -410,6 +410,7 @@ export default function App() {
           files={project.files}
           activeFile={activeFile}
           theme={prefs.theme}
+          syntax={prefs.syntax}
           fontSize={prefs.fontSize}
           wordWrap={prefs.wordWrap}
           keypad={prefs.keypad}
