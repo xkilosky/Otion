@@ -19,6 +19,11 @@ import { fileBadge, languageForFile, lazyLanguageForFile } from "../src/lib/lang
 import { editorTheme, paletteFor, tagSpecs } from "../src/lib/editorTheme";
 import { javascriptLanguage } from "@codemirror/lang-javascript";
 import { highlightTree, tagHighlighter } from "@lezer/highlight";
+import { expandAbbreviation, abbreviationBefore } from "../src/lib/emmet";
+import { collectSymbols, breadcrumbFor } from "../src/lib/symbols";
+import { linterForFile, lintHtml, lintCss, lintJson } from "../src/lib/diagnostics";
+import { completionsForFile } from "../src/lib/autocomplete";
+import { EditorState } from "@codemirror/state";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -57,6 +62,16 @@ const mount = (seed?: Record<string, string>) => {
   g.requestAnimationFrame = (cb: any) => setTimeout(() => cb(Date.now()), 0);
   g.cancelAnimationFrame = (id: any) => clearTimeout(id);
   g.localStorage = dom.window.localStorage;
+  // React detects a non-DOM import order here and falls back to the legacy
+  // attachEvent path; give jsdom the two methods it pokes so focus() stays quiet.
+  (dom.window.Element.prototype as any).attachEvent = () => {};
+  (dom.window.Element.prototype as any).detachEvent = () => {};
+  g.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+  g.visualViewport = undefined;
   g.IS_REACT_ACT_ENVIRONMENT = false;
 
   if (seed) {
@@ -161,6 +176,63 @@ async function logicSuite() {
     { channel: "smoke", theme: "light" },
   );
   say("no-index project is assembled", inferred.includes("body{color:red}") && inferred.includes("console.log"));
+
+
+  // --- Emmet ---------------------------------------------------------------
+  const emmet: [string, string | null][] = [
+    ["ul>li*3", '<ul>\n  <li></li>\n  <li></li>\n  <li></li>\n</ul>'],
+    ["div>p+ul>li", "<div>\n  <p></p>\n  <ul>\n    <li></li>\n  </ul>\n</div>"],
+    ["section.hero>h1{Title}+p.sub{Got it}", '<section class="hero">\n  <h1>Title</h1>\n  <p class="sub">Got it</p>\n</section>'],
+    ["nav>a*2{Link $}", '<nav>\n  <a href="">Link 1</a>\n  <a href="">Link 2</a>\n</nav>'],
+    ["div>div^p", "<div>\n  <div></div>\n</div>\n<p></p>"],
+    ["img.hero", '<img class="hero" src="" />'],
+    ["div", null],
+    ["hello world", null],
+  ];
+  for (const [source, expected] of emmet) {
+    const actual = expandAbbreviation(source);
+    say(`emmet: ${source}`, actual === expected, JSON.stringify(actual));
+  }
+  say("emmet: reads the abbreviation before the caret", abbreviationBefore("<div>\n  ul>l") === "ul>l");
+
+  // --- Symbols / outline ---------------------------------------------------
+  const htmlState = EditorState.create({ doc: "<main>\n  <section id=\"hero\">\n    <h1>Hello</h1>\n  </section>\n</main>" });
+  const htmlSymbols = collectSymbols(htmlState, "index.html");
+  say("symbols: html tags collected", htmlSymbols.some((symbol) => symbol.name === "main") && htmlSymbols.some((symbol) => symbol.name === "h1"), JSON.stringify(htmlSymbols.map((s2) => s2.name)));
+  const jsState = EditorState.create({ doc: "function boot() {\n}\nclass Game {\n}\nconst start = () => {};" });
+  const jsSymbols = collectSymbols(jsState, "game.js");
+  say("symbols: functions and classes", ["boot", "Game"].every((name) => jsSymbols.some((symbol) => symbol.name === name)), JSON.stringify(jsSymbols.map((s2) => s2.name)));
+  const cssState = EditorState.create({ doc: ".card {\n  color: red;\n}\n@media (max-width: 10px) {}" });
+  const cssSymbols = collectSymbols(cssState, "styles.css");
+  say("symbols: css selectors", cssSymbols.some((symbol) => symbol.name.includes(".card")), JSON.stringify(cssSymbols.map((s2) => s2.name)));
+  const crumb = breadcrumbFor(htmlState, htmlState.doc.toString().indexOf("Hello"), "index.html");
+  say(
+    "breadcrumbs follow the caret",
+    crumb.length >= 2 && crumb.some((entry) => entry.includes("main")) && crumb[crumb.length - 1] === "<h1>",
+    JSON.stringify(crumb),
+  );
+
+  // --- Diagnostics ---------------------------------------------------------
+  const htmlProblems = lintHtml(EditorState.create({ doc: "<div>\n  <span>hi</div>" }));
+  say("linter: unclosed tag reported", htmlProblems.length > 0, JSON.stringify(htmlProblems));
+  const cssProblems = lintCss(EditorState.create({ doc: ".a {\n  color red;\n}" }));
+  say("linter: css missing colon reported", cssProblems.some((problem) => /colon|expected/i.test(problem.message)), JSON.stringify(cssProblems));
+  const jsonProblems = lintJson(EditorState.create({ doc: '{"a": 1,}' }));
+  say("linter: json trailing comma reported", jsonProblems.length > 0, JSON.stringify(jsonProblems));
+  const cleanJson = lintJson(EditorState.create({ doc: '{"a": 1}' }));
+  say("linter: valid json is clean", cleanJson.length === 0, JSON.stringify(cleanJson));
+  say(
+    "linter: wired per file type",
+    typeof linterForFile("index.html") === "function" &&
+      typeof linterForFile("styles.css") === "function" &&
+      typeof linterForFile("app.js") === "function" &&
+      linterForFile("notes.txt") === null,
+  );
+
+  // --- Completions ---------------------------------------------------------
+  say("completions: html source present", completionsForFile("index.html") !== null);
+  say("completions: css source present", completionsForFile("styles.css") !== null);
+  say("completions: js source present", completionsForFile("game.js") !== null);
 
   // The formatter re-indents, it never re-spaces tokens — braces stay where the
   // author put them, and a string containing "}{" must not shift the depth.
@@ -303,6 +375,94 @@ async function appSuite() {
   await sleep(250);
   say("duplicate names rejected", document.querySelectorAll(".tab__name").length === 4);
   say("duplicate shows a toast", (document.querySelector(".toast")?.textContent ?? "").includes("already exists"));
+
+  // --- IDE surfaces --------------------------------------------------------
+  say("status bar renders", !!document.querySelector(".statusbar"));
+  say("status bar shows the file", (document.querySelector(".statusbar__item--name")?.textContent ?? "").includes("README.md"));
+  say("status bar counts lines", /\d+ lines/.test(document.querySelector(".statusbar")?.textContent ?? ""));
+  say("breadcrumbs render", !!document.querySelector(".breadcrumbs"));
+  say(
+    "minimap renders the document",
+    !!document.querySelector(".minimap") &&
+      document.querySelectorAll(".minimap__line, .minimap__blank").length > 0,
+  );
+  say("editor has an active line", !!document.querySelector(".cm-otion-active-line"));
+
+  const outlineChip = Array.from(document.querySelectorAll(".editor-foot .chip")).find(
+    (element) => element.textContent === "Outline",
+  ) as HTMLElement;
+  outlineChip.click();
+  await sleep(250);
+  say("outline panel opens", !!document.querySelector(".outline"));
+  (document.querySelector(".outline .icon-btn") as HTMLElement).click();
+  await sleep(150);
+  say("outline panel closes", !document.querySelector(".outline"));
+
+  // more-actions tray: touch reach for the keyboard-only operations
+  const moreChip = Array.from(document.querySelectorAll(".editor-foot .chip")).find(
+    (element) => element.textContent === "⋯",
+  ) as HTMLElement;
+  moreChip.click();
+  await sleep(200);
+  say("more-actions tray opens", document.querySelectorAll(".action-sheet__item").length >= 10);
+  const trayLabels = Array.from(document.querySelectorAll(".action-sheet__item span")).map((node) => node.textContent ?? "");
+  say(
+    "tray covers search, go-to-line, line ops",
+    ["Search", "Go to line", "Duplicate line", "Delete line", "Format"].every((label) => trayLabels.includes(label)),
+    JSON.stringify(trayLabels),
+  );
+  (Array.from(document.querySelectorAll(".action-sheet__item")).find(
+    (element) => element.textContent?.includes("Delete line"),
+  ) as HTMLElement).click();
+  await sleep(200);
+  say("tray closes after an action", !document.querySelector(".action-sheet"));
+
+  // command palette: opens, lists commands, runs the one you click
+  dom.window.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "P", metaKey: true, bubbles: true }));
+  await sleep(220);
+  const paletteLabels = () =>
+    Array.from(document.querySelectorAll(".palette__label")).map((node) => node.textContent ?? "");
+  say("command palette opens with ⌘⇧P", !!document.querySelector(".palette"));
+  say("palette lists commands with groups", document.querySelectorAll(".palette__group").length > 5);
+  say("palette offers the minimap toggle", paletteLabels().includes("Hide minimap"), JSON.stringify(paletteLabels()));
+  const clickPaletteItem = (label: string) => {
+    const item = Array.from(document.querySelectorAll(".palette__item")).find(
+      (element) => element.textContent?.includes(label),
+    ) as HTMLElement | undefined;
+    item?.click();
+  };
+  clickPaletteItem("Hide minimap");
+  await sleep(250);
+  say("palette closes after running", !document.querySelector(".palette"));
+  say("palette command applied (minimap hidden)", !document.querySelector(".minimap"));
+  say("minimap pref persisted", JSON.parse(localStorage.getItem("otion.prefs.v1") ?? "{}").minimap === false);
+
+  dom.window.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "P", metaKey: true, shiftKey: true, bubbles: true }));
+  await sleep(220);
+  clickPaletteItem("Show minimap");
+  await sleep(250);
+  say("minimap restored", !!document.querySelector(".minimap"));
+
+  // file switching still works from the sidebar sheet
+  button("Show file list")!.click();
+  await sleep(250);
+  say("file sheet opens", !!document.querySelector(".sheet"));
+  (Array.from(document.querySelectorAll(".sheet__body button, .sheet button")).find(
+    (element) => element.textContent?.includes("index.html"),
+  ) as HTMLElement).click();
+  await sleep(300);
+  say("opened file from the list", document.querySelector(".tab.is-active .tab__name")?.textContent === "index.html");
+  say("minimap follows the file switch", !!document.querySelector(".minimap"));
+
+  // go-to-line prompt is reachable from the status bar
+  const goToLineButton = Array.from(document.querySelectorAll(".statusbar__item--button")).find(
+    (element) => element.textContent === "Go to line",
+  ) as HTMLElement | undefined;
+  goToLineButton?.click();
+  await sleep(250);
+  say("status bar opens the go-to-line prompt", !!document.querySelector(".sheet input"));
+  (document.querySelector(".sheet__head .icon-btn") as HTMLElement | null)?.click();
+  await sleep(150);
 
   await sleep(700);
   const saved = localStorage.getItem("otion.project.v1") ?? "";

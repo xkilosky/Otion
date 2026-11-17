@@ -76,6 +76,17 @@ export function kindOf(name: string): FileKind {
   }
 }
 
+const LABELS: Record<string, string> = {
+  html: "HTML", htm: "HTML", svg: "SVG", vue: "Vue",
+  css: "CSS", scss: "SCSS",
+  js: "JavaScript", mjs: "JavaScript", cjs: "JavaScript", jsx: "JSX",
+  ts: "TypeScript", tsx: "TSX",
+  json: "JSON", md: "Markdown", markdown: "Markdown", py: "Python", txt: "Plain text",
+};
+
+export const languageLabel = (name: string) =>
+  LABELS[extensionOf(name)] ?? "Plain text";
+
 export const fileBadge = (name: string) => {
   switch (kindOf(name)) {
     case "html":

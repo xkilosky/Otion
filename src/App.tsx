@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TopBar from "./components/TopBar";
-import EditorPane from "./components/EditorPane";
+import EditorPane, { type EditorCommand } from "./components/EditorPane";
 import PreviewPane from "./components/PreviewPane";
 import ConsolePanel from "./components/ConsolePanel";
 import FileList from "./components/FileList";
@@ -8,6 +8,10 @@ import Sheet from "./components/Sheet";
 import SettingsSheet from "./components/SettingsSheet";
 import TemplatePicker from "./components/TemplatePicker";
 import Toast, { useToast } from "./components/Toast";
+import StatusBar from "./components/StatusBar";
+import CommandPalette, { type Command } from "./components/CommandPalette";
+import PromptSheet from "./components/PromptSheet";
+import type { EditorStats } from "./components/CodeEditor";
 import {
   loadActiveFileId,
   loadPrefs,
@@ -18,10 +22,17 @@ import {
 } from "./lib/storage";
 import { makeFile, projectFromTemplate, starterProject } from "./lib/templates";
 import { formatCode } from "./lib/format";
+import type { EditorView } from "@codemirror/view";
+import { languageLabel } from "./lib/languages";
 import type { ConsoleEntry, Project, UiPrefs } from "./types";
 
 const CONSOLE_LIMIT = 300;
 const QUICK_NAMES = ["index.html", "styles.css", "script.js", "README.md"];
+
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+
+/** A command without its auto-assigned nonce. */
+type EditorCommandInput = DistributiveOmit<EditorCommand, "nonce">;
 
 let entrySeq = 0;
 
@@ -36,7 +47,6 @@ export default function App() {
   const [channel, setChannel] = useState(newChannel);
   const [entries, setEntries] = useState<ConsoleEntry[]>([]);
   const [consoleOpen, setConsoleOpen] = useState(false);
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
@@ -45,6 +55,29 @@ export default function App() {
   const [saveError, setSaveError] = useState(false);
   const [newFileName, setNewFileName] = useState("");
   const [addingFile, setAddingFile] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [prompt, setPrompt] = useState<
+    | null
+    | {
+        title: string;
+        label: string;
+        value?: string;
+        inputMode?: "text" | "numeric";
+        confirmLabel?: string;
+        onSubmit: (value: string) => void;
+      }
+  >(null);
+  const [stats, setStats] = useState<EditorStats>({
+    lines: 0,
+    words: 0,
+    chars: 0,
+    errors: 0,
+    warnings: 0,
+  });
+  // The live EditorView, shared with the command palette and status bar.
+  const editorViewRef = useRef<EditorView | null>(null);
+  const [selectionLength, setSelectionLength] = useState(0);
+  const [command, setCommand] = useState<EditorCommand | null>(null);
 
   const { toast, notify } = useToast();
   const channelRef = useRef(channel);
@@ -140,7 +173,7 @@ export default function App() {
     const sync = () => {
       const covered = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
       const hidden = covered > 140;
-      setKeyboardOpen(hidden);
+      document.body.classList.toggle("kb-open", hidden);
       // Height comes straight from the visual viewport so the shell is correct
       // whether the keyboard overlays the page (iOS) or resizes it (Android).
       document.documentElement.style.setProperty("--app-height", `${Math.round(viewport.height)}px`);
@@ -236,8 +269,13 @@ export default function App() {
   );
 
   const renameProject = useCallback(() => {
-    const next = window.prompt("Project name", project.name);
-    if (next?.trim()) setProject((current) => ({ ...current, name: next.trim() }));
+    setPrompt({
+      title: "Rename project",
+      label: "Project name",
+      value: project.name,
+      confirmLabel: "Rename",
+      onSubmit: (next) => setProject((current) => ({ ...current, name: next })),
+    });
   }, [project.name]);
 
   const runPreview = useCallback(() => {
@@ -329,10 +367,52 @@ export default function App() {
     });
   }, [notify]);
 
-  // Keyboard shortcuts: run and save.
+  const dispatchCommand = useCallback((next: EditorCommandInput) => {
+    setCommand({ ...next, nonce: Date.now() } as EditorCommand);
+  }, []);
+
+  const saveNow = useCallback(() => {
+    const ok = saveProject(project);
+    setSaveError(!ok);
+    if (ok) setSavedAt(Date.now());
+    notify(ok ? "Saved locally" : "Storage full — export instead", ok ? "info" : "error");
+    return ok;
+  }, [project, notify]);
+
+  const openProblems = useCallback(() => {
+    if (prefs.mobileView === "preview") patchPrefs({ mobileView: "editor" });
+    dispatchCommand({ kind: "problems" });
+  }, [dispatchCommand, patchPrefs, prefs.mobileView]);
+
+  const openSearch = useCallback(() => {
+    if (prefs.mobileView === "preview") patchPrefs({ mobileView: "editor" });
+    dispatchCommand({ kind: "search" });
+  }, [dispatchCommand, patchPrefs, prefs.mobileView]);
+
+  const goToLine = useCallback(() => {
+    if (prefs.mobileView === "preview") patchPrefs({ mobileView: "editor" });
+    setPrompt({
+      title: "Go to line",
+      label: "Line number",
+      inputMode: "numeric",
+      value: String(cursor.line),
+      confirmLabel: "Go",
+      onSubmit: (value) => {
+        const line = Number.parseInt(value, 10);
+        if (!Number.isFinite(line)) {
+          notify("Enter a line number", "error");
+          return;
+        }
+        dispatchCommand({ kind: "goToLine", line });
+      },
+    });
+  }, [cursor.line, dispatchCommand, notify, patchPrefs, prefs.mobileView]);
+
+  // Global shortcuts: run, save, palette, problems, search.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey)) return;
+      const key = event.key.toLowerCase();
       if (event.key === "Enter") {
         event.preventDefault();
         runPreview();
@@ -340,17 +420,26 @@ export default function App() {
           patchPrefs({ mobileView: "preview" });
         }
         notify("Preview refreshed");
-      } else if (event.key.toLowerCase() === "s") {
+      } else if (key === "s" && !event.shiftKey) {
         event.preventDefault();
-        const ok = saveProject(project);
-        setSaveError(!ok);
-        if (ok) setSavedAt(Date.now());
-        notify(ok ? "Saved locally" : "Storage full — export instead", ok ? "info" : "error");
+        saveNow();
+      } else if (key === "p" && event.shiftKey) {
+        event.preventDefault();
+        setPaletteOpen(true);
+      } else if (key === "p") {
+        event.preventDefault();
+        setPaletteOpen(true);
+      } else if (key === "f" && event.shiftKey) {
+        event.preventDefault();
+        openProblems();
+      } else if (key === "j") {
+        event.preventDefault();
+        setConsoleOpen((value) => !value);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [project, runPreview, notify, patchPrefs, prefs.mobileView]);
+  }, [runPreview, notify, patchPrefs, prefs.mobileView, saveNow, openProblems]);
 
   const savedLabel = saveError
     ? "Storage full"
@@ -360,6 +449,166 @@ export default function App() {
           minute: "2-digit",
         })}`
       : "Autosave on";
+
+  const commands = useMemo<Command[]>(() => {
+    const list: Command[] = [
+      {
+        id: "run",
+        label: "Run / refresh preview",
+        group: "Preview",
+        keys: "⌘↵",
+        run: () => {
+          runPreview();
+          notify("Preview refreshed");
+        },
+      },
+      {
+        id: "toggle-run",
+        label: autoRun ? "Pause live preview" : "Resume live preview",
+        group: "Preview",
+        run: toggleAutoRun,
+      },
+      {
+        id: "save",
+        label: "Save workspace",
+        group: "File",
+        keys: "⌘S",
+        run: () => {
+          saveNow();
+        },
+      },
+      {
+        id: "new-file",
+        label: "New file",
+        group: "File",
+        run: openNewFile,
+      },
+      {
+        id: "templates",
+        label: "New from template",
+        group: "File",
+        run: () => setTemplatesOpen(true),
+      },
+      {
+        id: "export",
+        label: "Export project as JSON",
+        group: "File",
+        run: exportProject,
+      },
+      {
+        id: "format",
+        label: "Format document",
+        group: "Editor",
+        keys: "⇧⌥F",
+        run: () => dispatchCommand({ kind: "format" }),
+      },
+      {
+        id: "format-file",
+        label: `Format ${activeFile?.name ?? "file"} and save`,
+        group: "Editor",
+        run: formatActiveFile,
+      },
+      {
+        id: "search",
+        label: "Find in file",
+        group: "Editor",
+        keys: "⌘F",
+        run: openSearch,
+      },
+      {
+        id: "problems",
+        label: "Show problems",
+        group: "View",
+        keys: "⌘⇧F8",
+        run: openProblems,
+      },
+      {
+        id: "goto",
+        label: "Go to line…",
+        group: "Navigate",
+        keys: "⌘G",
+        run: goToLine,
+      },
+      {
+        id: "files",
+        label: "Show all files",
+        group: "Navigate",
+        run: () => setFilesOpen(true),
+      },
+      {
+        id: "minimap",
+        label: prefs.minimap ? "Hide minimap" : "Show minimap",
+        group: "View",
+        run: () => patchPrefs({ minimap: !prefs.minimap }),
+      },
+      {
+        id: "wrap",
+        label: prefs.wordWrap ? "Turn off word wrap" : "Turn on word wrap",
+        group: "View",
+        run: () => patchPrefs({ wordWrap: !prefs.wordWrap }),
+      },
+      {
+        id: "keypad",
+        label: prefs.keypad ? "Hide keypad" : "Show keypad",
+        group: "View",
+        run: () => patchPrefs({ keypad: !prefs.keypad }),
+      },
+      {
+        id: "console",
+        label: consoleOpen ? "Hide console" : "Show console",
+        group: "View",
+        keys: "⌘J",
+        run: () => setConsoleOpen((value) => !value),
+      },
+      {
+        id: "theme",
+        label: `Switch to ${prefs.theme === "dark" ? "light" : "dark"} theme`,
+        group: "Theme",
+        run: () => patchPrefs({ theme: prefs.theme === "dark" ? "light" : "dark" }),
+      },
+      {
+        id: "syntax",
+        label: `Use ${prefs.syntax === "neon" ? "Classic" : "Neon"} syntax`,
+        group: "Theme",
+        run: () => patchPrefs({ syntax: prefs.syntax === "neon" ? "classic" : "neon" }),
+      },
+      {
+        id: "settings",
+        label: "Open settings",
+        group: "App",
+        run: () => setSettingsOpen(true),
+      },
+      {
+        id: "rename-project",
+        label: "Rename project",
+        group: "App",
+        run: renameProject,
+      },
+    ];
+    return list;
+  }, [
+    activeFile?.name,
+    autoRun,
+    consoleOpen,
+    dispatchCommand,
+    exportProject,
+    formatActiveFile,
+    goToLine,
+    notify,
+    openNewFile,
+    openProblems,
+    openSearch,
+    patchPrefs,
+    prefs.keypad,
+    prefs.minimap,
+    prefs.syntax,
+    prefs.theme,
+    prefs.wordWrap,
+    renameProject,
+    runPreview,
+    saveNow,
+    toggleAutoRun,
+  ]);
 
   return (
     <div className={`app app--${prefs.theme} view-${prefs.mobileView}`}>
@@ -414,6 +663,7 @@ export default function App() {
           fontSize={prefs.fontSize}
           wordWrap={prefs.wordWrap}
           keypad={prefs.keypad}
+          minimap={prefs.minimap}
           visible={prefs.mobileView === "editor"}
           onChange={updateActiveFile}
           onFormat={formatActiveFile}
@@ -423,6 +673,14 @@ export default function App() {
           onRun={runFromEditor}
           onCursor={(line, column) => setCursor({ line, column })}
           onNotify={notify}
+          onStats={setStats}
+          onToggleMinimap={() => patchPrefs({ minimap: !prefs.minimap })}
+          onSave={saveNow}
+          registerView={(view) => {
+            editorViewRef.current = view;
+          }}
+          onSelection={setSelectionLength}
+          command={command}
         />
 
         <PreviewPane
@@ -444,24 +702,19 @@ export default function App() {
         onClear={() => setEntries([])}
       />
 
-      <footer className={`statusbar ${keyboardOpen ? "is-hidden" : ""}`}>
-        <span className="statusbar__item statusbar__item--name">
-          {activeFile?.name ?? "—"}
-        </span>
-        <span className="statusbar__item">
-          Ln {cursor.line}, Col {cursor.column}
-        </span>
-        <span className="statusbar__item statusbar__item--hide-sm">
-          {project.files.length} file{project.files.length === 1 ? "" : "s"}
-        </span>
-        <span className="statusbar__spacer" />
-        <span className={`statusbar__item ${autoRun ? "is-live" : ""}`}>
-          {autoRun ? "● Live" : "Paused"}
-        </span>
-        <span className="statusbar__item statusbar__item--hide-sm">
-          {saveError ? "Not saved" : "Autosaved"}
-        </span>
-      </footer>
+      <StatusBar
+        fileName={activeFile?.name ?? "—"}
+        language={activeFile ? languageLabel(activeFile.name) : "Plain text"}
+        cursor={cursor}
+        selection={selectionLength}
+        stats={stats}
+        autoRun={autoRun}
+        savedLabel={savedLabel}
+        saveError={saveError}
+        onOpenProblems={openProblems}
+        onGoToLine={goToLine}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
 
       <Sheet open={filesOpen} title="Project files" onClose={() => setFilesOpen(false)} size="tall">
         <FileList
@@ -546,6 +799,28 @@ export default function App() {
         open={templatesOpen}
         onClose={() => setTemplatesOpen(false)}
         onPick={loadTemplate}
+      />
+
+      <CommandPalette
+        open={paletteOpen}
+        commands={commands}
+        files={project.files.map((file) => ({ id: file.id, name: file.name }))}
+        onClose={() => setPaletteOpen(false)}
+        onOpenFile={(id) => {
+          selectFile(id);
+          if (prefs.mobileView === "preview") patchPrefs({ mobileView: "editor" });
+        }}
+      />
+
+      <PromptSheet
+        open={prompt !== null}
+        title={prompt?.title ?? ""}
+        label={prompt?.label ?? ""}
+        value={prompt?.value}
+        inputMode={prompt?.inputMode}
+        confirmLabel={prompt?.confirmLabel}
+        onClose={() => setPrompt(null)}
+        onSubmit={(value) => prompt?.onSubmit(value)}
       />
 
       <Toast toast={toast} />

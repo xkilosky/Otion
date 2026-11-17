@@ -12,6 +12,8 @@ const defaultPrefs: UiPrefs = {
   wordWrap: true,
   mobileView: "editor",
   keypad: true,
+  // Wide screens have room for a minimap; phones start with it off.
+  minimap: typeof window === "undefined" ? true : window.innerWidth >= 760,
 };
 
 export function loadProject(): Project {
@@ -60,6 +62,7 @@ export function loadPrefs(): UiPrefs {
       wordWrap: parsed.wordWrap !== false,
       mobileView: parsed.mobileView === "preview" ? "preview" : "editor",
       keypad: parsed.keypad !== false,
+      minimap: typeof parsed.minimap === "boolean" ? parsed.minimap : defaultPrefs.minimap,
     };
   } catch {
     return defaultPrefs;

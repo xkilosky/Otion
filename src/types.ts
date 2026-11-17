@@ -25,6 +25,7 @@ export interface UiPrefs {
   wordWrap: boolean;
   mobileView: MobileView;
   keypad: boolean;
+  minimap: boolean;
 }
 
 export type ConsoleLevel = "log" | "info" | "warn" | "error" | "debug" | "system";
