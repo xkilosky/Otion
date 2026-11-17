@@ -276,6 +276,7 @@ button {
   color: var(--text-dim);
   font-weight: 550;
   max-width: 26vw;
+  order: -1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
