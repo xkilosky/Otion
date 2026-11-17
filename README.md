@@ -1,5 +1,7 @@
 # Otion
 
+**Live:** https://otion-tau.vercel.app — installable as a PWA, works offline once loaded.
+
 A mobile-first code editor that runs entirely in the browser. Write HTML, CSS and
 JavaScript, then watch it run in a sandboxed live preview — with console output
 piped back into the editor.
@@ -104,6 +106,19 @@ src/
     storage.ts            localStorage read/write with fallbacks
   styles/global.css       design tokens + mobile-first layout
 ```
+
+## Deploying
+
+The app is deployed on Vercel from this repository (`vercel.json` pins the Vite
+preset, `dist` output, `npm ci`, an SPA rewrite and asset caching):
+
+```bash
+vercel            # or connect the repo in the Vercel dashboard
+```
+
+Any push that Vercel builds produces a preview URL; the branch alias for this
+work is `otion-git-arena-b97692f8-otion-flux-cf70.vercel.app`, and production is
+`otion-tau.vercel.app`.
 
 ## Notes
 
