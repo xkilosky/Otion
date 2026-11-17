@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import TopBar from "./components/TopBar";
 import EditorPane, { type EditorCommand } from "./components/EditorPane";
 import PreviewPane from "./components/PreviewPane";
@@ -13,6 +13,7 @@ import CommandPalette, { type Command } from "./components/CommandPalette";
 import PromptSheet from "./components/PromptSheet";
 import ProjectsSheet from "./components/ProjectsSheet";
 import SearchPanel from "./components/SearchPanel";
+import Splitter from "./components/Splitter";
 import type { EditorStats } from "./components/CodeEditor";
 import {
   duplicateProject,
@@ -24,6 +25,7 @@ import {
   saveActiveFileId,
   savePrefs,
   saveWorkspace,
+  clampSplit,
   projectFromTemplateWithMeta,
   sortProjects,
 } from "./lib/storage";
@@ -244,6 +246,18 @@ export default function App() {
   const patchPrefs = useCallback((patch: Partial<UiPrefs>) => {
     setPrefs((current) => ({ ...current, ...patch }));
   }, []);
+
+  const setSplit = useCallback((next: number) => {
+    setPrefs((current) => ({ ...current, split: clampSplit(next) }));
+  }, []);
+
+  const toggleZen = useCallback(() => {
+    setPrefs((current) => {
+      const zen = !current.zen;
+      notify(zen ? "Zen mode — ⌘⇧Z to exit" : "Zen mode off");
+      return { ...current, zen };
+    });
+  }, [notify]);
 
   const updateActiveFile = useCallback(
     (content: string) => {
@@ -738,6 +752,9 @@ export default function App() {
       } else if (key === "e" && event.shiftKey) {
         event.preventDefault();
         setProjectsOpen(true);
+      } else if (key === "z" && event.shiftKey) {
+        event.preventDefault();
+        setPrefs((current) => ({ ...current, zen: !current.zen }));
       } else if (key === "h" && event.shiftKey) {
         event.preventDefault();
         if (prefs.mobileView === "preview") patchPrefs({ mobileView: "editor" });
@@ -913,6 +930,31 @@ export default function App() {
         run: () => setConsoleOpen((value) => !value),
       },
       {
+        id: "zen",
+        label: prefs.zen ? "Exit zen mode" : "Zen mode",
+        group: "View",
+        keys: "⌘⇧Z",
+        run: toggleZen,
+      },
+      {
+        id: "split-even",
+        label: "Split view 50 / 50",
+        group: "View",
+        run: () => setSplit(0.5),
+      },
+      {
+        id: "split-editor",
+        label: "Give the editor more room",
+        group: "View",
+        run: () => setSplit(0.68),
+      },
+      {
+        id: "split-preview",
+        label: "Give the preview more room",
+        group: "View",
+        run: () => setSplit(0.34),
+      },
+      {
         id: "theme",
         label: `Switch to ${prefs.theme === "dark" ? "light" : "dark"} theme`,
         group: "Theme",
@@ -967,6 +1009,7 @@ export default function App() {
     patchPrefs,
     prefs.keypad,
     prefs.minimap,
+    prefs.zen,
     prefs.syntax,
     prefs.theme,
     prefs.wordWrap,
@@ -976,7 +1019,9 @@ export default function App() {
     renameProject,
     runPreview,
     saveNow,
+    setSplit,
     toggleAutoRun,
+    toggleZen,
     toggleStar,
     workspace.projects.length,
     notify,
@@ -985,7 +1030,10 @@ export default function App() {
   ]);
 
   return (
-    <div className={`app app--${prefs.theme} view-${prefs.mobileView}`}>
+    <div
+      className={`app app--${prefs.theme} view-${prefs.mobileView} ${prefs.zen ? "app--zen" : ""}`}
+      style={{ "--split": `${Math.round(clampSplit(prefs.split) * 100)}%` } as CSSProperties}
+    >
       <TopBar
         projectName={project.name}
         projectCount={workspace.projects.length}
@@ -1002,6 +1050,8 @@ export default function App() {
         onOpenFiles={() => setFilesOpen(true)}
         onOpenTemplates={() => setTemplatesOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
+        onToggleZen={toggleZen}
+        zen={prefs.zen}
       />
 
       <main
@@ -1046,6 +1096,35 @@ export default function App() {
           </div>
         </aside>
 
+        {prefs.zen ? null : (
+          <div className="project-rail" aria-label="Recent projects">
+            {sortProjects(workspace.projects)
+              .slice(0, 6)
+              .map((entry) => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  className={`project-rail__chip ${entry.id === project.id ? "is-active" : ""}`}
+                  onClick={() => openProject(entry.id)}
+                  title={`${entry.files.length} file${entry.files.length === 1 ? "" : "s"} · ${
+                    entry.description || "open project"
+                  }`}
+                >
+                  {entry.starred ? <span className="project-rail__star">★</span> : null}
+                  <span className="project-rail__name">{entry.name}</span>
+                </button>
+              ))}
+            <button
+              type="button"
+              className="project-rail__chip project-rail__chip--add"
+              onClick={() => setProjectsOpen(true)}
+              aria-label="All projects"
+            >
+              ▦ {workspace.projects.length}
+            </button>
+          </div>
+        )}
+
         <EditorPane
           files={project.files}
           activeFile={activeFile}
@@ -1073,6 +1152,8 @@ export default function App() {
           onSelection={setSelectionLength}
           command={command}
         />
+
+        <Splitter value={clampSplit(prefs.split)} onChange={setSplit} onCommit={setSplit} />
 
         <PreviewPane
           files={project.files}

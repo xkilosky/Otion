@@ -13,6 +13,8 @@ interface TopBarProps {
   onOpenFiles: () => void;
   onOpenTemplates: () => void;
   onOpenSettings: () => void;
+  onToggleZen: () => void;
+  zen: boolean;
 }
 
 export default function TopBar({
@@ -28,6 +30,8 @@ export default function TopBar({
   onOpenFiles,
   onOpenTemplates,
   onOpenSettings,
+  onToggleZen,
+  zen,
 }: TopBarProps) {
   return (
     <header className="topbar">
@@ -126,6 +130,16 @@ export default function TopBar({
           title="New from template"
         >
           ✦
+        </button>
+        <button
+          type="button"
+          className={`icon-btn topbar__zen ${zen ? "icon-btn--accent" : ""}`}
+          onClick={onToggleZen}
+          aria-label={zen ? "Exit zen mode" : "Zen mode"}
+          aria-pressed={zen}
+          title="Zen mode (⌘⇧Z)"
+        >
+          ⤢
         </button>
         <button
           type="button"

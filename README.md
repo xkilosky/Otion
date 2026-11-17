@@ -33,6 +33,19 @@ palette and a real status bar — all sized for a thumb.
 - **Light and heavy.** The editor stays smooth on a phone; Markdown and Python
   grammars are lazy-loaded.
 
+## Layout
+
+- **Resizable split.** From 860px up the editor and preview share the screen
+  with a draggable divider (drag it, `←`/`→` when focused, double-click or
+  `Enter` to reset to 50/50). Your ratio is remembered, and it can also be set
+  from Settings or the command palette ("Give the editor more room").
+- **Project rail.** A strip of your most recent projects sits above the split,
+  so switching is one tap — no sheet, no scrolling. The open one is highlighted.
+- **Zen mode** (`⌘⇧Z`). Strips the chrome down to the code: no rail, keypad,
+  footer, console or status bar, and a slim transparent header.
+- **Breakpoints that earn their space:** one pane + `Code|Preview` switch below
+  860px, two panes with a divider from 860px, and the file rail joins at 1024px.
+
 ## Projects
 
 Otion keeps as many projects as you like, all in this browser.
@@ -121,6 +134,7 @@ Otion keeps as many projects as you like, all in this browser.
 | `⌘`/`Ctrl` + `⇧` + `P` | Command palette (also `⌘P`) — includes project switching |
 | `⌘`/`Ctrl` + `⇧` + `E` | Project switcher |
 | `⌘`/`Ctrl` + `⇧` + `H` | Search across the project |
+| `⌘`/`Ctrl` + `⇧` + `Z` | Zen mode |
 | `⌘`/`Ctrl` + `⇧` + `F` | Format the current file (also `⌥⌘L`) |
 | `⌘`/`Ctrl` + `F` | Find in file (`⌘G` — go to line) |
 | `Tab` | Expand an Emmet abbreviation, else accept a completion |
@@ -163,6 +177,7 @@ src/
     CommandPalette.tsx    ⌘⇧P command + file switcher
     OutlinePanel.tsx      symbols + problems tabs
     Minimap.tsx           document map with a draggable viewport
+    Splitter.tsx          draggable editor/preview divider
     StatusBar.tsx         language, cursor, counts, problems, autosave
     PromptSheet.tsx       keyboard-safe prompt (go-to-line, rename)
     ProjectsSheet.tsx     project switcher: create, duplicate, star, export, delete

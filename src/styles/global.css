@@ -137,9 +137,11 @@ button {
 
 .workspace {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   display: flex;
   position: relative;
+  overflow: hidden;
 }
 
 /* --------------------------------- topbar -------------------------------- */
@@ -1463,6 +1465,14 @@ button {
   gap: 10px;
 }
 
+.range-row__value {
+  min-width: 34px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  text-align: right;
+}
+
 .range-row input[type="range"] {
   flex: 1;
   accent-color: var(--accent);
@@ -2674,6 +2684,151 @@ body.kb-open .statusbar {
   }
 }
 
+/* ------------------------------- layout: split ---------------------------- */
+
+.splitter {
+  display: none;
+  flex: 0 0 14px;
+  position: relative;
+  z-index: 6;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  background: var(--bg);
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  touch-action: none;
+}
+
+.splitter__grip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.splitter__grip i {
+  display: block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transition: background 0.15s ease;
+}
+
+.splitter:hover,
+.splitter.is-active {
+  background: color-mix(in oklab, var(--accent) 12%, var(--bg));
+}
+
+.splitter:hover .splitter__grip i,
+.splitter.is-active .splitter__grip i {
+  background: var(--accent);
+}
+
+.splitter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+body.is-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* Recent-project rail sitting above the editor/preview split */
+
+.project-rail {
+  display: none;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in oklab, var(--bg-sunken) 35%, transparent);
+}
+
+.project-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.project-rail__chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  max-width: 180px;
+  padding: 0 10px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 550;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.project-rail__chip:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+  background: var(--surface-hover);
+}
+
+.project-rail__chip.is-active {
+  color: var(--accent);
+  border-color: color-mix(in oklab, var(--accent) 45%, transparent);
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+}
+
+.project-rail__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-rail__star {
+  color: var(--warn);
+  font-size: 9px;
+}
+
+.project-rail__chip--add {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Zen mode: hide every chrome strip, keep the code */
+
+.app--zen .sidebar,
+.app--zen .keypad,
+.app--zen .editor-foot,
+.app--zen .console,
+.app--zen .statusbar,
+.app--zen .tabbar__icon {
+  display: none !important;
+}
+
+.app--zen .topbar {
+  height: calc(34px + env(safe-area-inset-top));
+  border-bottom-color: transparent;
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.app--zen .brand__mark,
+.app--zen .brand__text em {
+  display: none;
+}
+
+.app--zen .topbar__projects,
+.app--zen .topbar__search,
+.app--zen .topbar__templates,
+.app--zen .topbar__live {
+  display: none;
+}
+
 /* Tablets and up: two full panes, always visible */
 @media (min-width: 860px) {
   .workspace {
@@ -2686,9 +2841,28 @@ body.kb-open .statusbar {
     display: flex;
   }
 
-  .editor-pane,
+  /* The user's split ratio wins; both panes stay resizable. */
+  .editor-pane {
+    flex: 0 0 auto;
+    width: var(--split, 52%);
+    min-width: 0;
+  }
+
   .preview-pane {
-    flex: 1 1 50%;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .splitter {
+    display: flex;
+  }
+
+  .project-rail {
+    display: flex;
+  }
+
+  .editor-pane {
+    border-right: 0;
   }
 
   .topbar__mobile-switch {
@@ -2754,17 +2928,10 @@ body.kb-open .statusbar {
 }
 
 /* Desktop: three columns with the file rail */
-@media (min-width: 1180px) {
+@media (min-width: 1024px) {
   .sidebar {
     display: flex;
-  }
-
-  .editor-pane {
-    flex: 1 1 52%;
-  }
-
-  .preview-pane {
-    flex: 1 1 48%;
+    flex: 0 0 224px;
   }
 
   .keypad {

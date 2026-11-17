@@ -18,7 +18,12 @@ const defaultPrefs: UiPrefs = {
   keypad: true,
   // Wide screens have room for a minimap; phones start with it off.
   minimap: typeof window === "undefined" ? true : window.innerWidth >= 760,
+  split: 0.52,
+  zen: false,
 };
+
+/** Keep a split ratio inside a range that leaves both panes usable. */
+export const clampSplit = (value: number) => Math.min(0.82, Math.max(0.18, value));
 
 export const newProjectId = () =>
   `p_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -122,6 +127,11 @@ export function loadPrefs(): UiPrefs {
       mobileView: parsed.mobileView === "preview" ? "preview" : "editor",
       keypad: parsed.keypad !== false,
       minimap: typeof parsed.minimap === "boolean" ? parsed.minimap : defaultPrefs.minimap,
+      split:
+        typeof parsed.split === "number" && Number.isFinite(parsed.split)
+          ? clampSplit(parsed.split)
+          : defaultPrefs.split,
+      zen: parsed.zen === true,
     };
   } catch {
     return defaultPrefs;

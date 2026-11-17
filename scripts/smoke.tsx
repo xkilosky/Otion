@@ -25,7 +25,7 @@ import { linterForFile, lintHtml, lintCss, lintJson } from "../src/lib/diagnosti
 import { completionsForFile } from "../src/lib/autocomplete";
 import { EditorState } from "@codemirror/state";
 import { searchProject, groupMatches, replaceInFile, projectInsights } from "../src/lib/search";
-import { duplicateProject, sortProjects, formatBytes } from "../src/lib/storage";
+import { duplicateProject, sortProjects, formatBytes, clampSplit } from "../src/lib/storage";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -215,6 +215,11 @@ async function logicSuite() {
     { id: "b", name: "B", files: [], updatedAt: 1, starred: true },
   ])[0].id === "b");
   say("projects: byte formatting", formatBytes(900) === "900 B" && formatBytes(2048) === "2.0 KB");
+  say(
+    "layout: split ratio is clamped to a usable range",
+    clampSplit(0.05) === 0.18 && clampSplit(0.99) === 0.82 && clampSplit(0.5) === 0.5,
+    `${clampSplit(0.05)} ${clampSplit(0.99)}`,
+  );
 
   // --- Emmet ---------------------------------------------------------------
   const emmet: [string, string | null][] = [

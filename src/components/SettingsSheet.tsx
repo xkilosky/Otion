@@ -221,12 +221,67 @@ export default function SettingsSheet({
       </div>
 
       <div className="settings-group">
+        <h3>Layout</h3>
+        <div className="setting-row">
+          <div>
+            <strong>Zen mode</strong>
+            <p>Hide the rail, keypad, console and status bar — just code and preview.</p>
+          </div>
+          <button
+            type="button"
+            className={`chip ${prefs.zen ? "is-on" : ""}`}
+            onClick={() => onChange({ zen: !prefs.zen })}
+            aria-pressed={prefs.zen}
+          >
+            {prefs.zen ? "On" : "Off"}
+          </button>
+        </div>
+        <div className="setting-row setting-row--stack">
+          <div>
+            <strong>Editor / preview split</strong>
+            <p>Drag the divider, or nudge it here. Double-click the divider to reset.</p>
+          </div>
+          <div className="range-row">
+            <button
+              type="button"
+              className="chip"
+              onClick={() => onChange({ split: Math.max(0.18, prefs.split - 0.08) })}
+              aria-label="Editor smaller"
+            >
+              −
+            </button>
+            <input
+              type="range"
+              min={18}
+              max={82}
+              step={2}
+              value={Math.round(prefs.split * 100)}
+              onChange={(event) => onChange({ split: Number(event.target.value) / 100 })}
+              aria-label="Editor share of the workspace"
+            />
+            <button
+              type="button"
+              className="chip"
+              onClick={() => onChange({ split: Math.min(0.82, prefs.split + 0.08) })}
+              aria-label="Editor larger"
+            >
+              ＋
+            </button>
+            <span className="range-row__value">{Math.round(prefs.split * 100)}%</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="settings-group">
         <h3>Tips & shortcuts</h3>
         <ul className="tips">
           <li><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>↵</kbd> — run the preview</li>
           <li><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>S</kbd> — save to this browser</li>
           <li><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>⇧</kbd> + <kbd>F</kbd> — format the file</li>
           <li><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>F</kbd> — find inside the file</li>
+          <li><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>⇧</kbd> + <kbd>E</kbd> — switch project</li>
+          <li><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>⇧</kbd> + <kbd>H</kbd> — search the project</li>
+          <li><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>⇧</kbd> + <kbd>Z</kbd> — zen mode</li>
           <li>On a phone, tap <strong>Preview</strong> in the header to see your page full-screen.</li>
           <li>Templates inline every file into one HTML document — export or copy it any time.</li>
         </ul>

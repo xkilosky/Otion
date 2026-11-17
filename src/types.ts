@@ -42,6 +42,10 @@ export interface UiPrefs {
   mobileView: MobileView;
   keypad: boolean;
   minimap: boolean;
+  /** Editor share of the split, 0.2–0.8. */
+  split: number;
+  /** Zen mode hides the rail, keypad, console and status bar. */
+  zen: boolean;
 }
 
 export type ConsoleLevel = "log" | "info" | "warn" | "error" | "debug" | "system";
