@@ -15,6 +15,8 @@ import PromptSheet from "./components/PromptSheet";
 import ProjectsSheet from "./components/ProjectsSheet";
 import SearchPanel from "./components/SearchPanel";
 import Splitter from "./components/Splitter";
+import ProjectRail from "./components/ProjectRail";
+import SplitRatio from "./components/SplitRatio";
 import type { EditorStats } from "./components/CodeEditor";
 import {
   duplicateProject,
@@ -1070,8 +1072,6 @@ export default function App() {
         }}
         mobileView={prefs.mobileView}
         onMobileView={(view) => patchPrefs({ mobileView: view })}
-        split={clampSplit(prefs.split)}
-        onSplit={setSplit}
         autoRun={autoRun}
         onToggleAutoRun={toggleAutoRun}
         onOpenFiles={() => setFilesOpen(true)}
@@ -1087,70 +1087,51 @@ export default function App() {
         data-dock={dock}
       >
         <aside className="sidebar" aria-label="Project files">
-          <button
-            type="button"
-            className="sidebar__project"
-            onClick={() => setProjectsOpen(true)}
-            title="Switch project (⌘⇧E)"
-          >
-            <span className="sidebar__project-dot" aria-hidden="true" />
-            <span className="sidebar__project-name">{project.name}</span>
-            <span className="sidebar__project-count">{workspace.projects.length}</span>
-            <span aria-hidden="true">⇄</span>
-          </button>
-          <div className="sidebar__head">
-            <span>Files</span>
+          {prefs.zen ? null : (
+            <ProjectRail
+              projects={sortProjects(workspace.projects).slice(0, 6)}
+              activeId={project.id}
+              onOpen={openProject}
+              onBrowse={() => setProjectsOpen(true)}
+            />
+          )}
+          <div className="sidebar__stack">
             <button
               type="button"
-              className="icon-btn icon-btn--sm"
-              onClick={openNewFile}
-              aria-label="New file"
+              className="sidebar__project"
+              onClick={() => setProjectsOpen(true)}
+              title="Switch project (⌘⇧E)"
             >
-              ＋
+              <span className="sidebar__project-dot" aria-hidden="true" />
+              <span className="sidebar__project-name">{project.name}</span>
+              <span className="sidebar__project-count">{workspace.projects.length}</span>
+              <span aria-hidden="true">⇄</span>
             </button>
-          </div>
-          <FileList
-            files={project.files}
-            activeId={activeFile?.id ?? null}
-            onSelect={selectFile}
-            onRename={renameFile}
-            onDelete={deleteFile}
-            onAdd={openNewFile}
-          />
-          <div className="sidebar__foot">
-            <span className={`dot-status ${savedAt && !saveError ? "is-saved" : ""}`} />
-            <span>{savedLabel}</span>
+            <div className="sidebar__head">
+              <span>Files</span>
+              <button
+                type="button"
+                className="icon-btn icon-btn--sm"
+                onClick={openNewFile}
+                aria-label="New file"
+              >
+                ＋
+              </button>
+            </div>
+            <FileList
+              files={project.files}
+              activeId={activeFile?.id ?? null}
+              onSelect={selectFile}
+              onRename={renameFile}
+              onDelete={deleteFile}
+              onAdd={openNewFile}
+            />
+            <div className="sidebar__foot">
+              <span className={`dot-status ${savedAt && !saveError ? "is-saved" : ""}`} />
+              <span>{savedLabel}</span>
+            </div>
           </div>
         </aside>
-
-        {prefs.zen ? null : (
-          <div className="project-rail" aria-label="Recent projects">
-            {sortProjects(workspace.projects)
-              .slice(0, 6)
-              .map((entry) => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  className={`project-rail__chip ${entry.id === project.id ? "is-active" : ""}`}
-                  onClick={() => openProject(entry.id)}
-                  title={`${entry.files.length} file${entry.files.length === 1 ? "" : "s"} · ${
-                    entry.description || "open project"
-                  }`}
-                >
-                  {entry.starred ? <span className="project-rail__star">★</span> : null}
-                  <span className="project-rail__name">{entry.name}</span>
-                </button>
-              ))}
-            <button
-              type="button"
-              className="project-rail__chip project-rail__chip--add"
-              onClick={() => setProjectsOpen(true)}
-              aria-label="All projects"
-            >
-              ▦ {workspace.projects.length}
-            </button>
-          </div>
-        )}
 
         <EditorPane
           files={project.files}
@@ -1181,6 +1162,14 @@ export default function App() {
           onProblems={setProblemList}
           command={command}
         />
+
+        {prefs.mobileView === "split" || prefs.mobileView === "preview-first" ? (
+          <SplitRatio
+            value={clampSplit(prefs.split)}
+            onChange={setSplit}
+            first={prefs.mobileView === "split" ? "code" : "preview"}
+          />
+        ) : null}
 
         <Splitter value={clampSplit(prefs.split)} onChange={setSplit} onCommit={setSplit} />
 

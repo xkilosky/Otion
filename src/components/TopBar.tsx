@@ -15,9 +15,6 @@ interface TopBarProps {
   onSearch: () => void;
   mobileView: MobileView;
   onMobileView: (view: MobileView) => void;
-  /** Editor share of a stacked phone split, 0–1. */
-  split: number;
-  onSplit: (next: number) => void;
   autoRun: boolean;
   onToggleAutoRun: () => void;
   onOpenFiles: () => void;
@@ -35,8 +32,6 @@ export default function TopBar({
   onSearch,
   mobileView,
   onMobileView,
-  split,
-  onSplit,
   autoRun,
   onToggleAutoRun,
   onOpenFiles,
@@ -86,7 +81,7 @@ export default function TopBar({
 
       <button
         type="button"
-        className="topbar__projects"
+        className="topbar__projects topbar__optional"
         onClick={onOpenProjects}
         aria-label={`Switch project (${projectCount} projects)`}
         title="Switch project (⌘⇧E)"
@@ -97,7 +92,7 @@ export default function TopBar({
 
       <button
         type="button"
-        className="icon-btn topbar__search"
+        className="icon-btn topbar__search topbar__optional"
         onClick={onSearch}
         aria-label="Search in project"
         title="Search in project (⌘⇧H)"
@@ -121,26 +116,10 @@ export default function TopBar({
         ))}
       </div>
 
-      {mobileView === "split" || mobileView === "preview-first" ? (
-        <label className="topbar__split" title="Drag to resize both panes">
-          <span className="visually-hidden">Editor height share</span>
-          <input
-            type="range"
-            min={22}
-            max={78}
-            step={2}
-            value={Math.round(split * 100)}
-            onChange={(event) => onSplit(Number(event.target.value) / 100)}
-            aria-label="Editor height share"
-          />
-          <span className="topbar__split-value">{Math.round(split * 100)}%</span>
-        </label>
-      ) : null}
-
       <div className="topbar__actions">
         <button
           type="button"
-          className={`icon-btn topbar__live ${autoRun ? "icon-btn--live" : ""}`}
+          className={`icon-btn topbar__live topbar__optional ${autoRun ? "icon-btn--live" : ""}`}
           onClick={onToggleAutoRun}
           aria-label={autoRun ? "Pause live preview" : "Enable live preview"}
           title={autoRun ? "Live preview on" : "Live preview paused"}
@@ -149,7 +128,7 @@ export default function TopBar({
         </button>
         <button
           type="button"
-          className="icon-btn topbar__templates"
+          className="icon-btn topbar__templates topbar__optional"
           onClick={onOpenTemplates}
           aria-label="New from template"
           title="New from template"
@@ -158,7 +137,7 @@ export default function TopBar({
         </button>
         <button
           type="button"
-          className={`icon-btn topbar__zen ${zen ? "icon-btn--accent" : ""}`}
+          className={`icon-btn topbar__zen topbar__optional ${zen ? "icon-btn--accent" : ""}`}
           onClick={onToggleZen}
           aria-label={zen ? "Exit zen mode" : "Zen mode"}
           aria-pressed={zen}

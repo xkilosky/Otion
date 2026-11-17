@@ -44,8 +44,32 @@ export default function BottomDock({
   onClear,
   onOpenProblem,
 }: BottomDockProps) {
+  const host = useRef<HTMLElement | null>(null);
   const scroller = useRef<HTMLDivElement | null>(null);
   const open = tab !== "closed";
+
+  // Publish the dock height so the toast and the search panel can sit above it
+  // instead of covering it (or being covered by it).
+  useEffect(() => {
+    const el = host.current;
+    const root = document.documentElement;
+    if (!el) return;
+    // Measured from the dock's top edge to the bottom of the window, so the
+    // status bar underneath it is accounted for too.
+    const sync = () => {
+      const top = el.getBoundingClientRect().top;
+      const offset = Math.max(0, Math.round(window.innerHeight - top));
+      root.style.setProperty("--dock-h", `${offset}px`);
+    };
+    sync();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(sync);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--dock-h");
+    };
+  }, [open]);
 
   useEffect(() => {
     if (tab !== "output") return;
@@ -56,7 +80,11 @@ export default function BottomDock({
   const toggle = (next: "output" | "problems") => onTab(tab === next ? "closed" : next);
 
   return (
-    <section className={`dock ${open ? "is-open" : ""}`} aria-label="Output and problems">
+    <section
+      className={`dock ${open ? "is-open" : ""}`}
+      aria-label="Output and problems"
+      ref={host as never}
+    >
       <div className="dock__tabs">
         <button
           type="button"

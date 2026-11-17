@@ -54,7 +54,11 @@ export default function StatusBar({
       <span className="statusbar__item">
         {selection > 0 ? `${selection} selected` : `Ln ${cursor.line}, Col ${cursor.column}`}
       </span>
-      <button type="button" className="statusbar__item statusbar__item--button" onClick={onGoToLine}>
+      <button
+        type="button"
+        className="statusbar__item statusbar__item--button statusbar__item--hide-sm"
+        onClick={onGoToLine}
+      >
         Go to line
       </button>
       <button

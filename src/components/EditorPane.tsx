@@ -364,7 +364,7 @@ export default function EditorPane({
           </button>
           <button
             type="button"
-            className="chip chip--ghost"
+            className="chip chip--ghost chip--optional"
             onClick={() => {
               onFormat();
               onNotify(`Formatted (${formatKind(activeFile?.name ?? "")})`);
@@ -375,7 +375,7 @@ export default function EditorPane({
           </button>
           <button
             type="button"
-            className="chip chip--ghost"
+            className="chip chip--ghost chip--optional"
             onClick={() => {
               editor.current?.toggleComment();
             }}

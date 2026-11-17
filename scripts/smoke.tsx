@@ -349,6 +349,12 @@ async function appSuite() {
   await sleep(250);
   say("problems tab switches the same dock", !!document.querySelector(".dock__problem, .dock__empty"));
   say("problems tab is marked active", (document.querySelectorAll(".dock__tab")[1] as HTMLElement).className.includes("is-active"));
+  say(
+    "dock publishes its height so overlays can clear it",
+    document.documentElement.style.getPropertyValue("--dock-h").endsWith("px"),
+    document.documentElement.style.getPropertyValue("--dock-h"),
+  );
+
   (document.querySelectorAll(".dock__tab")[1] as HTMLElement).click();
   await sleep(200);
   say("clicking the active tab closes the dock", !document.querySelector(".dock.is-open"));
@@ -369,12 +375,32 @@ async function appSuite() {
   say("stacked split mode applies", !!document.querySelector(".app.view-split"));
   say("stacked split keeps both panes in the tree", !!document.querySelector(".editor-pane") && !!document.querySelector(".preview-pane"));
   say("split mode exposes a divider", !!document.querySelector(".splitter"));
+  say(
+    "project rail sits inside the sidebar stack, not in the workspace row",
+    !!document.querySelector(".sidebar .project-rail") &&
+      document.querySelector(".workspace > .project-rail") === null,
+  );
   say("split pref persists for the phone", JSON.parse(localStorage.getItem("otion.prefs.v1") ?? "{}").mobileView === "split");
+
+  // The ratio control rides the divider, not the header, so the header keeps
+  // its four tabs and nothing overlaps.
+  say("split ratio control is present", !!document.querySelector(".split-ratio input[type=\"range\"]"));
+  say(
+    "split ratio control is not in the header",
+    !document.querySelector(".topbar .split-ratio, .topbar input[type='range']"),
+  );
+  say(
+    "header keeps the layout switch with all four tabs",
+    document.querySelectorAll(".topbar__mobile-switch button").length === 4,
+  );
 
   mobileTab(2)!.click();
   await sleep(200);
   say("preview-first mode applies", !!document.querySelector(".app.view-preview-first"));
-
+  say(
+    "preview-first keeps the ratio control",
+    !!document.querySelector(".split-ratio input[type=\"range\"]"),
+  );
   mobileTab(0)!.click();
   await sleep(150);
   say("back to code-only mode", !!document.querySelector(".app.view-editor"));

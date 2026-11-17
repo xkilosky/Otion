@@ -39,12 +39,21 @@ palette and a real status bar — all sized for a thumb.
   with a draggable divider (drag it, `←`/`→` when focused, double-click or
   `Enter` to reset to 50/50). Your ratio is remembered, and it can also be set
   from Settings or the command palette ("Give the editor more room").
-- **Project rail.** A strip of your most recent projects sits above the split,
-  so switching is one tap — no sheet, no scrolling. The open one is highlighted.
+- **Four phone modes.** The icon switch in the header cycles *code only →
+  stacked split → preview first → preview only*. In the two stacked modes the
+  ratio lives on a slider **on the divider** (`Code ──●── Preview`), so the
+  header keeps one row of controls and nothing overlaps at 320px.
+- **Project rail.** A vertical strip of recent projects docked beside the file
+  list. Icon-only by default so file names keep their room; the `‹` toggle
+  expands it to names. The open project is highlighted.
 - **Zen mode** (`⌘⇧Z`). Strips the chrome down to the code: no rail, keypad,
-  footer, console or status bar, and a slim transparent header.
-- **Breakpoints that earn their space:** one pane + `Code|Preview` switch below
-  860px, two panes with a divider from 860px, and the file rail joins at 1024px.
+  footer, dock or status bar, and a slim transparent header.
+- **Breakpoints that earn their space:** one pane + layout switch below 860px,
+  two panes with a divider from 860px, and the file rail joins at 1120px.
+- **Nothing overlaps, on purpose.** The header sheds optional buttons in order
+  (templates → live → switcher → search → project name), the dock publishes its
+  own height as `--dock-h` so toasts and the search panel clear it, and the
+  workspace is its own stacking context so in-pane panels never cover the dock.
 
 ## Projects
 
@@ -183,7 +192,9 @@ src/
     ProjectsSheet.tsx     project switcher: create, duplicate, star, export, delete
     SearchPanel.tsx       project-wide search & replace with quick queries
     PreviewPane.tsx       debounced live preview, widths, copy/reload
-    ConsolePanel.tsx      console dock
+    BottomDock.tsx        tabbed Output/Problems dock
+    ProjectRail.tsx       collapsible recent-projects rail
+    SplitRatio.tsx        split-ratio slider that rides the divider
     FileList.tsx          file rows with rename/delete
     Sheet.tsx             bottom sheet (phone) / dialog (tablet+)
     SettingsSheet.tsx     appearance, project tools, tips
